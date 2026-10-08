@@ -1,0 +1,851 @@
+import { analysePainting, autoRecipe, resolveRecipe } from './analysis.js';
+import { Ambient } from './audio.js';
+import { fitSource, loadFirst, loadImage, paintStudy } from './loader.js';
+import {
+  CHAPTERS,
+  DEFAULT_RECIPE,
+  PAINTINGS,
+  TRANSITIONS,
+  commonsImageUrls,
+  commonsThumbUrl,
+} from './paintings.js';
+import { Recorder } from './recorder.js';
+import { Renderer } from './renderer.js';
+import { Handles, buildEditor, buildGallery } from './ui.js';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('stage');
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = (t) => t * t * (3 - 2 * t);
+const params = new URLSearchParams(location.search);
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const TRANSITION_SECONDS = { brush: 3.4, bleed: 3.8, light: 3.6, flow: 3.4, dark: 3, tiles: 3.6 };
+const REVEAL_SECONDS = 8;
+const STORAGE_PREFIX = 'turner-lumieres:recipe:';
+
+let renderer;
+try {
+  renderer = new Renderer(canvas);
+} catch (err) {
+  const fatal = document.createElement('div');
+  fatal.className = 'fatal';
+  fatal.textContent = `${err.message} Try a recent version of Chrome, Edge, Firefox or Safari.`;
+  document.body.replaceChildren(fatal);
+  throw err;
+}
+
+const ambient = new Ambient();
+const recorder = new Recorder(canvas);
+
+const state = {
+  entries: PAINTINGS.map((p) => ({ ...p })),
+  prepared: new Map(),
+  index: 0,
+  current: null,
+  playing: params.get('autoplay') !== '0' && !reducedMotion,
+  paintTime: 0,
+  time: 0,
+  reveal: 1,
+  trans: 1,
+  transType: 'brush',
+  transitionOverride: 'auto',
+  mode: params.get('view') === 'room' ? 'room' : 'flat',
+  editing: false,
+  quality: 1,
+  view: [0, 0, 1, 1],
+  mouse: [-10, -10],
+  mouseVel: [0, 0],
+  mouseSmooth: [0.5, 0.5],
+  pointerDown: false,
+  look: [0, 0.08],
+  lastLookInput: -100,
+  textAlpha: 0,
+  textRect: [0, 0, 0, 0],
+  chapterShown: false,
+  busy: false,
+  pending: null,
+  advancing: false,
+  snapshot: false,
+};
+
+// ---------------------------------------------------------------------------
+// Status and loading feedback
+
+let statusTimer = 0;
+function status(text, ms = 4500) {
+  const el = $('status');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+let loadingTimer = 0;
+function showLoading(text) {
+  clearTimeout(loadingTimer);
+  loadingTimer = setTimeout(() => {
+    $('loadingText').textContent = text;
+    $('loading').hidden = false;
+  }, 250);
+}
+function hideLoading() {
+  clearTimeout(loadingTimer);
+  $('loading').hidden = true;
+}
+
+// ---------------------------------------------------------------------------
+// Preparing paintings: fetch (or paint a study), then analyse.
+
+function prepare(entry) {
+  if (state.prepared.has(entry.id)) return state.prepared.get(entry.id);
+  const job = (async () => {
+    let source = entry.source;
+    let isStudy = false;
+    if (!source) {
+      try {
+        const img = await loadFirst(entry.files.flatMap(commonsImageUrls));
+        source = fitSource(img, Math.min(3840, renderer.maxTexture));
+      } catch (err) {
+        if (!entry.study) throw err;
+        source = paintStudy(entry.study, 1600, entry.id);
+        isStudy = true;
+      }
+    }
+    return { entry, source, analysis: analysePainting(source), isStudy };
+  })();
+  state.prepared.set(entry.id, job);
+  job.catch(() => state.prepared.delete(entry.id));
+  return job;
+}
+
+function storageKey(prepared) {
+  return `${STORAGE_PREFIX}${prepared.entry.id}:${prepared.isStudy ? 'study' : 'image'}`;
+}
+
+function baseRecipe(prepared) {
+  const authored = prepared.entry.recipe ?? autoRecipe(prepared.analysis);
+  return resolveRecipe({ ...DEFAULT_RECIPE, ...authored }, prepared.analysis);
+}
+
+function buildRecipe(prepared) {
+  const base = baseRecipe(prepared);
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey(prepared)) ?? 'null');
+    if (saved && typeof saved === 'object') return { ...base, ...pickKnown(saved) };
+  } catch {
+    // Storage can be unavailable (private mode); the defaults still work.
+  }
+  return base;
+}
+
+// Only accept known keys with the right type, so a stale or hand-edited
+// score cannot break the renderer.
+function pickKnown(obj) {
+  const out = {};
+  for (const [key, def] of Object.entries(DEFAULT_RECIPE)) {
+    const v = obj?.[key];
+    const numeric = typeof def === 'number' || def === 'auto' || def === 'sun';
+    if (numeric ? typeof v === 'number' && Number.isFinite(v) : typeof v === 'string') out[key] = v;
+  }
+  return out;
+}
+
+let saveTimer = 0;
+function saveRecipe() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(storageKey(state.current), JSON.stringify(state.current.recipe));
+    } catch {
+      // Ignore quota or privacy errors.
+    }
+  }, 300);
+}
+
+// ---------------------------------------------------------------------------
+// Sequencing
+
+async function goTo(i) {
+  const n = state.entries.length;
+  state.pending = ((i % n) + n) % n;
+  if (state.busy) return;
+  state.busy = true;
+  try {
+    while (state.pending !== null) {
+      const target = state.pending;
+      state.pending = null;
+      const entry = state.entries[target];
+      showLoading(`Preparing ${entry.title}`);
+      let prepared;
+      try {
+        prepared = await prepare(entry);
+      } catch (err) {
+        console.warn(err);
+        status(`Could not load ${entry.title}.`);
+        continue;
+      }
+      if (state.pending !== null) continue;
+      hideLoading();
+      applyPainting(target, prepared);
+    }
+  } finally {
+    hideLoading();
+    state.busy = false;
+    state.advancing = false;
+  }
+  const next = state.entries[(state.index + 1) % state.entries.length];
+  prepare(next).catch(() => {});
+}
+
+function applyPainting(index, prepared) {
+  const first = !state.current;
+  const prevChapter = state.current?.entry.chapter;
+  if (!first) renderer.capturePrev();
+  renderer.setPainting(prepared.source, prepared.analysis);
+  const recipe = buildRecipe(prepared);
+  state.current = { ...prepared, recipe };
+  state.index = index;
+  state.paintTime = 0;
+  if (first) {
+    state.reveal = 0;
+    state.trans = 1;
+  } else {
+    state.reveal = 1;
+    state.trans = 0;
+    state.transType = state.transitionOverride === 'auto' ? recipe.transition : state.transitionOverride;
+  }
+  state.view = targetView(0);
+  state.chapterShown = prevChapter !== prepared.entry.chapter;
+  drawTitle();
+  ambient.setMood(recipe.mood);
+  gallery.setCurrent(prepared.entry.id);
+  if (state.editing) refreshEditor();
+  if (prepared.isStudy) {
+    status('Wikimedia Commons could not be reached, so a procedural study stands in for this painting.', 6000);
+  }
+}
+
+function next() {
+  goTo(state.index + 1);
+}
+function prev() {
+  goTo(state.index - 1);
+}
+
+// ---------------------------------------------------------------------------
+// Camera: a slow push toward the focal point, then an easing pull back.
+
+function cameraAt(r, tau) {
+  const dur = r.duration;
+  let u = tau / dur;
+  if (!state.playing) u = 1 - Math.abs(1 - ((tau / dur) % 2));
+  u = clamp(u, 0, 1);
+  const push = reducedMotion ? 1 + (r.zoom - 1) * 0.3 : r.zoom;
+  if (u < 0.72) {
+    const k = ease(u / 0.72);
+    return [lerp(1.04, push, k), lerp(0.5, r.focusX, k), lerp(0.5, r.focusY, k)];
+  }
+  const k = ease((u - 0.72) / 0.28);
+  const endZoom = 1.04 + (push - 1.04) * 0.55;
+  return [lerp(push, endZoom, k), lerp(r.focusX, lerp(0.5, r.focusX, 0.6), k), lerp(r.focusY, lerp(0.5, r.focusY, 0.6), k)];
+}
+
+function targetView(tau) {
+  const sa = renderer.sceneAspect;
+  const pa = state.current.analysis.aspect;
+  if (state.editing) return editorView(pa);
+  const [zoom, cx, cy] = cameraAt(state.current.recipe, tau);
+  let w = 1;
+  let h = 1;
+  if (sa > pa) h = pa / sa;
+  else w = sa / pa;
+  w /= zoom;
+  h /= zoom;
+  return [clamp(cx - w / 2, 0, 1 - w), clamp(cy - h / 2, 0, 1 - h), w, h];
+}
+
+// In edit mode the whole painting is fitted into the space left free by
+// the editor panel, so every marker stays reachable.
+function editorView(pa) {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const panel = editorEl.getBoundingClientRect();
+  let x1 = W;
+  let y1 = H - 110;
+  if (panel.width && panel.left > W * 0.5) x1 = panel.left - 12;
+  else if (panel.height) y1 = Math.min(y1, panel.top - 12);
+  const x0 = 12;
+  const y0 = 64;
+  const rw = Math.max(40, x1 - x0);
+  const rh = Math.max(40, y1 - y0);
+  let pw = rw;
+  let ph = rw / pa;
+  if (ph > rh) {
+    ph = rh;
+    pw = rh * pa;
+  }
+  const px = x0 + (rw - pw) / 2;
+  const py = y0 + (rh - ph) / 2;
+  return [-px / pw, -py / ph, W / pw, H / ph];
+}
+
+// ---------------------------------------------------------------------------
+// Title card, drawn into a texture so recordings include it.
+
+const titleCanvas = document.createElement('canvas');
+titleCanvas.width = 1600;
+titleCanvas.height = 400;
+
+function drawTitle() {
+  const ctx = titleCanvas.getContext('2d');
+  const { entry } = state.current;
+  ctx.clearRect(0, 0, titleCanvas.width, titleCanvas.height);
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowBlur = 28;
+  ctx.textBaseline = 'alphabetic';
+  const chapter = CHAPTERS[entry.chapter];
+  let y = 128;
+  if (chapter && state.chapterShown) {
+    ctx.font = '500 32px Inter, system-ui, sans-serif';
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '7px';
+    ctx.fillStyle = 'rgba(242,183,91,0.95)';
+    ctx.fillText(`${chapter.numeral} · ${chapter.title.toUpperCase()}`, 8, y);
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  }
+  y += 108;
+  let size = 100;
+  do {
+    ctx.font = `italic 500 ${size}px "Cormorant Garamond", Georgia, serif`;
+    size -= 4;
+  } while (ctx.measureText(entry.title).width > titleCanvas.width - 30 && size > 40);
+  ctx.fillStyle = 'rgba(248,240,224,0.98)';
+  ctx.fillText(entry.title, 6, y);
+  ctx.font = '400 32px Inter, system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(243,234,215,0.78)';
+  const artist = entry.kind === 'user' ? 'Your painting' : 'J. M. W. Turner';
+  const meta = [artist, entry.year, entry.collection].filter(Boolean).join(', ');
+  const suffix = state.current.isStudy ? '   (procedural study, image offline)' : '';
+  ctx.fillText(meta + suffix, 8, y + 66);
+  renderer.setText(titleCanvas);
+}
+
+function titleAlpha(tau) {
+  if (state.editing) return 0;
+  return clamp((tau - 1.2) / 1.4, 0, 1) * clamp((12 - tau) / 2, 0, 1);
+}
+
+// ---------------------------------------------------------------------------
+// Sizing and adaptive quality
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  renderer.resize(window.innerWidth, window.innerHeight, dpr, state.quality, state.mode);
+  const W = canvas.width;
+  const H = canvas.height;
+  const hPx = Math.min(H * 0.2, (W * 0.92) / 4);
+  state.textRect = [0.035, (window.innerWidth < 860 ? 120 : 132) * dpr / H, (hPx * 4) / W, hPx / H];
+  if (state.current) state.view = targetView(state.paintTime);
+}
+window.addEventListener('resize', resize);
+
+// Lower the internal resolution when the GPU cannot keep up. The first
+// seconds are ignored (shader compilation, image decoding) and two slow
+// windows in a row are needed before stepping down.
+const perf = { acc: 0, frames: 0, since: -4, slow: 0 };
+function adaptQuality(dt) {
+  perf.since += dt;
+  if (perf.since < 0) return;
+  perf.acc += dt;
+  perf.frames++;
+  if (perf.since < 2.5) return;
+  const avg = perf.acc / perf.frames;
+  perf.acc = 0;
+  perf.frames = 0;
+  perf.since = 0;
+  perf.slow = avg > 1 / 38 ? perf.slow + 1 : 0;
+  const steps = [1, 0.8, 0.65, 0.5];
+  const i = steps.indexOf(state.quality);
+  if (perf.slow >= 2 && i < steps.length - 1) {
+    perf.slow = 0;
+    state.quality = steps[i + 1];
+    resize();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Frame loop
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  state.time += dt;
+  if (state.current) {
+    tick(dt);
+    const r = state.current.recipe;
+    const motion = reducedMotion ? 0.4 : 1;
+    const viewTarget = targetView(state.paintTime);
+    const k = state.editing || state.trans < 1 ? 1 - Math.exp(-dt * 5) : 1 - Math.exp(-dt * 2.5);
+    const prevView = state.view;
+    state.view = state.view.map((v, i) => lerp(v, viewTarget[i], k));
+    const vel = [(state.view[0] - prevView[0]) / Math.max(dt, 1e-3), (state.view[1] - prevView[1]) / Math.max(dt, 1e-3)];
+    state.mouseSmooth = state.mouseSmooth.map((v, i) => {
+      const m = state.mouse[i] < -1 ? 0.5 : state.mouse[i];
+      return lerp(v, m, 1 - Math.exp(-dt * 2));
+    });
+    const par = r.parallax * motion * (state.editing ? 0 : 1);
+    // Camera velocity is clamped so large view changes (leaving the editor,
+    // resizing) do not tear the planes apart.
+    const parallax = [
+      ((state.mouseSmooth[0] - 0.5) * 0.02 + clamp(vel[0], -0.012, 0.012)) * par,
+      ((state.mouseSmooth[1] - 0.5) * 0.014 + clamp(vel[1], -0.012, 0.012)) * par,
+    ];
+    if (state.mode === 'room' && performance.now() - state.lastLookInput > 5000) {
+      state.look[0] = lerp(state.look[0], Math.sin(state.time * 0.045) * 0.9, 1 - Math.exp(-dt * 0.5));
+    }
+    const recipe = motion < 1 ? { ...r, flow: r.flow * motion } : r;
+    renderer.render({
+      recipe,
+      time: state.time,
+      view: state.view,
+      parallax,
+      mouse: state.mouse,
+      mouseVel: state.mouseVel,
+      audio: ambient.sample(),
+      reveal: clamp(state.reveal, 0, 1),
+      transition: clamp(state.trans, 0, 1),
+      transitionType: state.transType,
+      textRect: state.textRect,
+      textAlpha: titleAlpha(state.paintTime),
+      mode: state.mode,
+      look: state.look,
+      fov: window.innerWidth < window.innerHeight ? 95 : 78,
+    });
+    state.mouseVel = [0, 0];
+    if (state.snapshot) {
+      state.snapshot = false;
+      recorder.snapshot(fileName());
+    }
+    if (state.editing) updateHandles();
+    gallery.setProgress(state.current.entry.id, state.paintTime / r.duration);
+    adaptQuality(dt);
+  }
+  requestAnimationFrame(frame);
+}
+
+function tick(dt) {
+  state.paintTime += dt;
+  if (state.reveal < 1) state.reveal += dt / REVEAL_SECONDS;
+  if (state.trans < 1) state.trans += dt / (TRANSITION_SECONDS[state.transType] ?? 3.4);
+  const r = state.current.recipe;
+  if (state.playing && !state.editing && !state.advancing && state.paintTime > r.duration && state.reveal >= 1) {
+    state.advancing = true;
+    next();
+  }
+}
+
+function fileName() {
+  return `turner-lumieres-${state.current?.entry.id ?? 'frame'}`;
+}
+
+// ---------------------------------------------------------------------------
+// Pointer: stir the paint, or look around the quarry.
+
+function pointerToScene(e) {
+  return [e.clientX / window.innerWidth, e.clientY / window.innerHeight];
+}
+
+let lastPointer = null;
+canvas.addEventListener('pointerdown', (e) => {
+  state.pointerDown = true;
+  lastPointer = [e.clientX, e.clientY];
+  canvas.setPointerCapture(e.pointerId);
+  if (state.mode === 'room') document.body.classList.add('dragging');
+});
+canvas.addEventListener('pointermove', (e) => {
+  wake();
+  if (state.mode === 'room') {
+    if (state.pointerDown && lastPointer) {
+      state.look[0] += (e.clientX - lastPointer[0]) * 0.004;
+      state.look[1] = clamp(state.look[1] - (e.clientY - lastPointer[1]) * 0.003, -0.45, 0.7);
+      state.lastLookInput = performance.now();
+    }
+    lastPointer = [e.clientX, e.clientY];
+    return;
+  }
+  const p = pointerToScene(e);
+  if (state.mouse[0] > -1) {
+    const strength = state.pointerDown ? 1.2 : 0.3;
+    state.mouseVel[0] += (p[0] - state.mouse[0]) * strength;
+    state.mouseVel[1] += (p[1] - state.mouse[1]) * strength;
+  }
+  state.mouse = p;
+});
+const endPointer = () => {
+  state.pointerDown = false;
+  lastPointer = null;
+  document.body.classList.remove('dragging');
+};
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerleave', () => {
+  state.mouse = [-10, -10];
+});
+canvas.addEventListener('wheel', (e) => {
+  if (state.mode !== 'room') return;
+  e.preventDefault();
+  state.look[1] = clamp(state.look[1] - e.deltaY * 0.0008, -0.45, 0.7);
+  state.lastLookInput = performance.now();
+}, { passive: false });
+
+// Interface fades out during the show.
+let idleTimer = 0;
+function wake() {
+  document.body.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    const dialogOpen = document.querySelector('dialog[open]');
+    if (state.playing && !state.editing && !dialogOpen) document.body.classList.add('idle');
+  }, 3500);
+}
+window.addEventListener('pointermove', wake, { passive: true });
+window.addEventListener('pointerdown', wake, { passive: true });
+
+// ---------------------------------------------------------------------------
+// Gallery
+
+const gallery = buildGallery($('gallery'), (id) => {
+  const i = state.entries.findIndex((e) => e.id === id);
+  if (i >= 0 && i !== state.index) goTo(i);
+});
+
+function studyThumb(entry) {
+  return paintStudy(entry.study, 240, entry.id, { strokes: 1400 }).toDataURL('image/jpeg', 0.8);
+}
+
+for (const entry of state.entries) {
+  gallery.add(entry, commonsThumbUrl(entry.files[0]), (img) => {
+    img.src = studyThumb(entry);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Controls
+
+const playBtn = $('playBtn');
+function setPlaying(v) {
+  state.playing = v;
+  playBtn.textContent = v ? '❚❚' : '▶';
+  playBtn.title = v ? 'Pause the show (space)' : 'Play the show (space)';
+  if (v && state.current && state.paintTime > state.current.recipe.duration) state.paintTime = state.current.recipe.duration * 0.6;
+  wake();
+}
+setPlaying(state.playing);
+playBtn.addEventListener('click', () => setPlaying(!state.playing));
+$('nextBtn').addEventListener('click', next);
+$('prevBtn').addEventListener('click', prev);
+
+const transitionSel = $('transitionSel');
+for (const t of TRANSITIONS) {
+  const o = document.createElement('option');
+  o.value = t.id;
+  o.textContent = t.label;
+  transitionSel.append(o);
+}
+transitionSel.addEventListener('change', () => {
+  state.transitionOverride = transitionSel.value;
+});
+
+const viewBtn = $('viewBtn');
+function setMode(mode) {
+  state.mode = mode;
+  document.body.classList.toggle('room', mode === 'room');
+  viewBtn.textContent = mode === 'room' ? 'Flat view' : 'Quarry view';
+  viewBtn.classList.toggle('active', mode === 'room');
+  if (mode === 'room' && state.editing) setEditing(false);
+  resize();
+}
+viewBtn.addEventListener('click', () => setMode(state.mode === 'room' ? 'flat' : 'room'));
+
+const soundBtn = $('soundBtn');
+async function toggleSound() {
+  if (ambient.on) {
+    ambient.stop();
+  } else {
+    try {
+      await ambient.start();
+      if (state.current) ambient.setMood(state.current.recipe.mood);
+    } catch (err) {
+      console.warn(err);
+      status('Audio could not start in this browser.');
+    }
+  }
+  soundBtn.classList.toggle('active', ambient.on);
+  soundBtn.setAttribute('aria-pressed', String(ambient.on));
+}
+soundBtn.addEventListener('click', toggleSound);
+
+$('musicBtn').addEventListener('click', () => $('musicInput').click());
+$('musicInput').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    await ambient.useMusic(file);
+    soundBtn.classList.add('active');
+    soundBtn.setAttribute('aria-pressed', 'true');
+    status(`Playing ${file.name}. The light now follows the music.`);
+  } catch (err) {
+    console.warn(err);
+    status('That audio file could not be played.');
+  }
+});
+
+const recordBtn = $('recordBtn');
+recordBtn.classList.add('rec');
+function toggleRecord() {
+  if (!recorder.supported) {
+    status('Video recording is not supported in this browser.');
+    return;
+  }
+  if (recorder.recording) {
+    recorder.stop();
+    status('Recording saved.');
+  } else {
+    recorder.start(ambient.stream, fileName());
+    status(ambient.on ? 'Recording video with sound. Press again to stop.' : 'Recording video. Turn sound on to include the score.');
+  }
+  recordBtn.textContent = recorder.recording ? 'Stop' : 'Record';
+  recordBtn.classList.toggle('active', recorder.recording);
+}
+recordBtn.addEventListener('click', toggleRecord);
+$('snapBtn').addEventListener('click', () => {
+  state.snapshot = true;
+});
+
+$('fullBtn').addEventListener('click', toggleFullscreen);
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+}
+
+$('helpBtn').addEventListener('click', () => $('helpDialog').showModal());
+
+// ---------------------------------------------------------------------------
+// Editor
+
+const editorEl = $('editor');
+const editor = buildEditor($('editorGroups'), (key, value) => {
+  if (!state.current) return;
+  state.current.recipe[key] = value;
+  if (key === 'mood') ambient.setMood(value);
+  saveRecipe();
+});
+const handles = new Handles($('handles'), (name, x, y) => {
+  const v = state.view;
+  const px = clamp(v[0] + (x / window.innerWidth) * v[2], 0, 1);
+  const py = clamp(v[1] + (y / window.innerHeight) * v[3], 0, 1);
+  const r = state.current.recipe;
+  const keys = { sun: ['sunX', 'sunY'], vortex: ['vortexX', 'vortexY'], focus: ['focusX', 'focusY'], smoke: ['smokeX', 'smokeY'] };
+  if (name === 'horizon') r.horizon = py;
+  else {
+    r[keys[name][0]] = px;
+    r[keys[name][1]] = py;
+  }
+  saveRecipe();
+});
+
+function updateHandles() {
+  const v = state.view;
+  handles.update(
+    (x, y) => [((x - v[0]) / v[2]) * window.innerWidth, ((y - v[1]) / v[3]) * window.innerHeight],
+    state.current.recipe,
+    window.innerWidth,
+  );
+}
+
+function refreshEditor() {
+  $('editorTitle').textContent = state.current.entry.title;
+  editor.setValues(state.current.recipe);
+}
+
+function setEditing(v) {
+  if (v && state.mode === 'room') setMode('flat');
+  state.editing = v;
+  editorEl.hidden = !v;
+  handles.visible = v;
+  $('editBtn').classList.toggle('active', v);
+  if (v && state.current) refreshEditor();
+  wake();
+}
+$('editBtn').addEventListener('click', () => setEditing(!state.editing));
+$('editorClose').addEventListener('click', () => setEditing(false));
+
+$('resetRecipe').addEventListener('click', () => {
+  try {
+    localStorage.removeItem(storageKey(state.current));
+  } catch {
+    // Nothing stored.
+  }
+  state.current.recipe = baseRecipe(state.current);
+  refreshEditor();
+  status('Animation reset to its original score.');
+});
+$('reanalyse').addEventListener('click', () => {
+  const { sun } = state.current.analysis;
+  Object.assign(state.current.recipe, { sunX: sun.x, sunY: sun.y, focusX: sun.x, focusY: sun.y });
+  saveRecipe();
+  status('Light source placed on the brightest area of the painting.');
+});
+$('exportRecipe').addEventListener('click', () => {
+  const { entry, recipe } = state.current;
+  const blob = new Blob([JSON.stringify({ id: entry.id, title: entry.title, recipe }, null, 2)], {
+    type: 'application/json',
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${entry.id}-score.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+});
+$('importRecipe').addEventListener('click', () => $('importInput').click());
+$('importInput').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const json = JSON.parse(await file.text());
+    Object.assign(state.current.recipe, pickKnown(json.recipe ?? json));
+    refreshEditor();
+    saveRecipe();
+    ambient.setMood(state.current.recipe.mood);
+    status(`Score applied to ${state.current.entry.title}.`);
+  } catch {
+    status('That file is not a valid score.');
+  }
+  e.target.value = '';
+});
+
+// ---------------------------------------------------------------------------
+// Visitors' own paintings
+
+function prettyName(name) {
+  const base = decodeURIComponent(name.split('/').pop() ?? 'Untitled').replace(/\.[a-z0-9]+$/i, '');
+  const cleaned = base.replace(/[_-]+/g, ' ').replace(/^\d+px /, '').trim() || 'Untitled';
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+async function addUserPainting({ file, url }) {
+  showLoading('Reading your painting');
+  try {
+    const src = file ? URL.createObjectURL(file) : url;
+    const img = await loadImage(src);
+    const source = fitSource(img, Math.min(3840, renderer.maxTexture));
+    // Throws a SecurityError when the host refuses to share pixels.
+    const analysis = analysePainting(source);
+    const entry = {
+      id: `user-${Date.now().toString(36)}`,
+      title: prettyName(file ? file.name : url),
+      year: '',
+      collection: '',
+      chapter: 'user',
+      kind: 'user',
+      source,
+    };
+    const prepared = { entry, source, analysis, isStudy: false };
+    state.prepared.set(entry.id, Promise.resolve(prepared));
+    state.entries.push(entry);
+    const thumb = fitSource(source, 240);
+    gallery.add(entry, thumb instanceof HTMLCanvasElement ? thumb.toDataURL('image/jpeg', 0.8) : src);
+    await goTo(state.entries.length - 1);
+    status('Your painting has been analysed. Open Edit to shape its animation.');
+  } catch (err) {
+    console.warn(err);
+    hideLoading();
+    status(
+      err?.name === 'SecurityError'
+        ? 'That site does not allow its images to be animated. Download the image and add it as a file.'
+        : 'That image could not be loaded. Some sites block sharing their images, adding the file itself always works.',
+      6500,
+    );
+  }
+}
+
+const addDialog = $('addDialog');
+$('addBtn').addEventListener('click', () => addDialog.showModal());
+$('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  addDialog.close();
+  addUserPainting({ file });
+  e.target.value = '';
+});
+addDialog.addEventListener('close', () => {
+  const url = $('urlInput').value.trim();
+  if (addDialog.returnValue === 'url' && url) addUserPainting({ url });
+  $('urlInput').value = '';
+});
+
+let dragDepth = 0;
+window.addEventListener('dragenter', (e) => {
+  if (!e.dataTransfer?.types.includes('Files')) return;
+  dragDepth++;
+  $('dropzone').hidden = false;
+});
+window.addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) $('dropzone').hidden = true;
+});
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  $('dropzone').hidden = true;
+  const file = [...(e.dataTransfer?.files ?? [])].find((f) => f.type.startsWith('image/'));
+  if (file) addUserPainting({ file });
+});
+
+// ---------------------------------------------------------------------------
+// Keyboard
+
+window.addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+  if (document.querySelector('dialog[open]')) return;
+  wake();
+  const k = e.key.toLowerCase();
+  if (k === 'arrowright') next();
+  else if (k === 'arrowleft') prev();
+  else if (k === ' ') {
+    e.preventDefault();
+    setPlaying(!state.playing);
+  } else if (k === 'e') setEditing(!state.editing);
+  else if (k === 'v') setMode(state.mode === 'room' ? 'flat' : 'room');
+  else if (k === 's') toggleSound();
+  else if (k === 'r') toggleRecord();
+  else if (k === 'f') toggleFullscreen();
+  else if (k === 'h') document.body.classList.toggle('hide-ui');
+  else if (k === '?') $('helpDialog').showModal();
+  else if (k === 'escape' && state.editing) setEditing(false);
+});
+
+// ---------------------------------------------------------------------------
+// Boot
+
+async function boot() {
+  setMode(state.mode);
+  resize();
+  try {
+    await document.fonts?.load('italic 500 64px "Cormorant Garamond"');
+  } catch {
+    // Fallback serif is fine.
+  }
+  requestAnimationFrame(frame);
+  const start = state.entries.findIndex((e) => e.id === params.get('painting'));
+  await goTo(Math.max(0, start));
+  wake();
+}
+
+boot();
+
+// Exposed for debugging and automated checks.
+window.turnerLumieres = { state, goTo, setMode, setEditing, renderer };

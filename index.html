@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Turner lumières</title>
+    <meta
+      name="description"
+      content="Immersive animated paintings in the manner of the Carrières des Lumières shows, built around J. M. W. Turner."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&display=swap"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <canvas id="stage" aria-label="Animated painting"></canvas>
+
+    <div id="handles" class="handles" hidden>
+      <div class="horizon-line" data-handle="horizon"><span>Horizon</span></div>
+      <button type="button" class="handle sun" data-handle="sun" title="Light source">☀</button>
+      <button type="button" class="handle vortex" data-handle="vortex" title="Vortex centre">◎</button>
+      <button type="button" class="handle focus" data-handle="focus" title="Camera focus">✛</button>
+      <button type="button" class="handle smoke" data-handle="smoke" title="Smoke or steam source">≋</button>
+    </div>
+
+    <header class="topbar ui">
+      <div class="brand">
+        <span class="brand-mark">Lumières</span>
+        <span class="brand-sub">J. M. W. Turner</span>
+      </div>
+      <nav class="controls" aria-label="Show controls">
+        <button type="button" id="prevBtn" class="icon" title="Previous painting (←)">‹</button>
+        <button type="button" id="playBtn" class="icon" title="Play or pause the show (space)">❚❚</button>
+        <button type="button" id="nextBtn" class="icon" title="Next painting (→)">›</button>
+        <label class="select">
+          <span class="sr-only">Transition</span>
+          <select id="transitionSel" title="Transition between paintings">
+            <option value="auto">Transitions: as scored</option>
+          </select>
+        </label>
+        <button type="button" id="viewBtn" title="Switch between flat projection and the quarry view (V)">Quarry view</button>
+        <button type="button" id="soundBtn" title="Generative score (S)">Sound</button>
+        <button type="button" id="musicBtn" title="Use your own music, the light follows it">Music</button>
+        <input id="musicInput" type="file" accept="audio/*" hidden />
+        <button type="button" id="recordBtn" title="Record a video (R)">Record</button>
+        <button type="button" id="snapBtn" class="icon" title="Save a still frame">◉</button>
+        <button type="button" id="editBtn" title="Edit the animation of this painting (E)">Edit</button>
+        <button type="button" id="fullBtn" class="icon" title="Fullscreen (F)">⤢</button>
+        <button type="button" id="helpBtn" class="icon" title="How it works (?)">?</button>
+      </nav>
+    </header>
+
+    <div id="status" class="status ui" role="status" aria-live="polite"></div>
+
+    <aside id="editor" class="editor ui" hidden aria-label="Animation editor">
+      <div class="editor-head">
+        <div>
+          <p class="eyebrow">Animation score</p>
+          <h2 id="editorTitle">Painting</h2>
+        </div>
+        <button type="button" id="editorClose" class="icon" title="Close editor">×</button>
+      </div>
+      <p class="hint">Drag the markers on the painting to place the light, vortex, horizon, camera focus and smoke.</p>
+      <div id="editorGroups"></div>
+      <div class="editor-actions">
+        <button type="button" id="resetRecipe">Reset</button>
+        <button type="button" id="reanalyse">Re-detect light</button>
+        <button type="button" id="exportRecipe">Export</button>
+        <button type="button" id="importRecipe">Import</button>
+        <input id="importInput" type="file" accept="application/json,.json" hidden />
+      </div>
+    </aside>
+
+    <footer class="dock ui">
+      <div id="gallery" class="gallery" role="list" aria-label="Paintings"></div>
+      <button type="button" id="addBtn" class="add-tile" title="Animate your own painting">
+        <span>+</span>
+        Your painting
+      </button>
+    </footer>
+
+    <div id="loading" class="loading" hidden>
+      <div class="loading-inner">
+        <div class="spinner"></div>
+        <p id="loadingText">Preparing the canvas</p>
+      </div>
+    </div>
+
+    <div id="dropzone" class="dropzone" hidden>
+      <p>Drop an image to animate it</p>
+    </div>
+
+    <dialog id="addDialog" class="dialog">
+      <form method="dialog">
+        <h2>Animate your own painting</h2>
+        <p>Choose an image file, or paste the address of an image. Wikimedia Commons links work best, other sites may refuse to share their pixels with WebGL.</p>
+        <label class="file-pick">
+          <input id="fileInput" type="file" accept="image/*" />
+        </label>
+        <label class="url-field">
+          <span>Image address</span>
+          <input id="urlInput" type="url" placeholder="https://upload.wikimedia.org/…" />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel">Cancel</button>
+          <button id="urlAdd" value="url" class="primary">Add from address</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="helpDialog" class="dialog wide">
+      <form method="dialog">
+        <h2>How the paintings come alive</h2>
+        <p>
+          The Carrières des Lumières shows (Culturespaces, AMIEX process) project thousands of digitised artworks across
+          7,000 m² of quarry walls, pillars and floor, set in motion and cut to a soundtrack. This program rebuilds that
+          vocabulary in real time on the GPU.
+        </p>
+        <ol class="techniques">
+          <li><strong>Strokes that move.</strong> The direction of every brushstroke is measured from the image, and the paint is advected along it with a looping flow map, so skies and seas churn the way Turner painted them.</li>
+          <li><strong>Depth without cut-outs.</strong> A pseudo depth map from aerial perspective drives 2.5D parallax as the camera glides and the pointer moves.</li>
+          <li><strong>Slow camera.</strong> Each painting gets a long push toward its focal point and an easing pull back.</li>
+          <li><strong>Living elements.</strong> Water ripples below the horizon, mist drifts, smoke and steam rise, fire flickers, embers, rain and snow fall or spiral in the vortex.</li>
+          <li><strong>Light.</strong> A breathing glow and god rays from the light source, pulsing with the music.</li>
+          <li><strong>The painting paints itself.</strong> Colour washes first, then the strokes, spreading out from the light.</li>
+          <li><strong>Transitions.</strong> Brushstroke wipes, watercolour bleeds, floods of light, melting paint, mosaics.</li>
+          <li><strong>The space.</strong> Quarry view wraps the frame around a limestone hall with pillars and visitors.</li>
+        </ol>
+        <h3>Shortcuts</h3>
+        <p class="keys">
+          <kbd>←</kbd> <kbd>→</kbd> paintings · <kbd>Space</kbd> play or pause · <kbd>E</kbd> edit · <kbd>V</kbd> quarry view ·
+          <kbd>S</kbd> sound · <kbd>R</kbd> record · <kbd>F</kbd> fullscreen · <kbd>H</kbd> hide interface. Move the pointer over the
+          painting to stir the paint, drag to stir harder. In quarry view, drag to look around.
+        </p>
+        <p class="credits">Paintings by J. M. W. Turner (1775 to 1851), public-domain reproductions from Wikimedia Commons.</p>
+        <div class="dialog-actions">
+          <button value="close" class="primary">Close</button>
+        </div>
+      </form>
+    </dialog>
+
+    <noscript>This experience needs JavaScript and WebGL2.</noscript>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
