@@ -99,6 +99,17 @@ button.rec.active,
   color: #fff;
 }
 
+/* Sound is on but the browser is waiting for a first click. */
+.controls button.waiting {
+  animation: waiting 1.6s ease-in-out infinite;
+}
+
+@keyframes waiting {
+  50% {
+    box-shadow: 0 0 0 5px rgba(242, 183, 91, 0.35);
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -986,5 +997,9 @@ button.primary:hover {
 @media (prefers-reduced-motion: reduce) {
   .ui {
     transition: none;
+  }
+
+  .controls button.waiting {
+    animation: none;
   }
 }

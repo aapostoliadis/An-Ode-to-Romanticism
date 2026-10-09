@@ -336,14 +336,24 @@ function showProgress(tau, dur) {
   return clamp(u, 0, 1);
 }
 
-// Every painting opens with no push (zoom 1, the painting filling the
-// screen), then the camera eases in to the painting's push and draws back.
+// Zoom at which the whole painting is in view (below 1 when the screen and
+// the painting have different shapes; 1 fills the screen).
+function fitZoom() {
+  const sa = renderer.sceneAspect;
+  const pa = state.current.analysis.aspect;
+  return Math.min(1, sa > pa ? pa / sa : sa / pa);
+}
+
+// Every painting opens fully zoomed out, the whole canvas in view, and holds
+// there through its title; then the camera eases in through filling the
+// screen to the painting's push, and draws back.
+const OPEN_HOLD = 0.1;
 function cameraAt(r, tau) {
   const u = showProgress(tau, r.duration);
   const push = Math.max(1, reducedMotion ? 1 + (r.zoom - 1) * 0.3 : r.zoom);
   if (u < 0.72) {
-    const k = ease(u / 0.72);
-    return [lerp(1, push, k), lerp(0.5, r.focusX, k), lerp(0.5, r.focusY, k)];
+    const k = ease(clamp((u - OPEN_HOLD) / (0.72 - OPEN_HOLD), 0, 1));
+    return [lerp(fitZoom(), push, k), lerp(0.5, r.focusX, k), lerp(0.5, r.focusY, k)];
   }
   const k = ease((u - 0.72) / 0.28);
   const endZoom = 1 + (push - 1) * 0.55;
@@ -365,7 +375,10 @@ function coverView(zoom, cx, cy) {
   else w = sa / pa;
   w /= zoom;
   h /= zoom;
-  return [clamp(cx - w / 2, 0, 1 - w), clamp(cy - h / 2, 0, 1 - h), w, h];
+  // Wider than the painting: keep it centred.
+  const x = w >= 1 ? (1 - w) / 2 : clamp(cx - w / 2, 0, 1 - w);
+  const y = h >= 1 ? (1 - h) / 2 : clamp(cy - h / 2, 0, 1 - h);
+  return [x, y, w, h];
 }
 
 // In edit mode the whole painting is fitted into the space left free by
@@ -536,6 +549,9 @@ function layerViews(r, motion) {
   if (state.editing) return { sky: v, water: v, land: v };
   const depth = clamp(r.parallax * motion, 0, 1.5);
   const base = coverView(1, 0.5, 0.5);
+  // Zoomed out further than filling the screen, the planes stay together,
+  // so the whole painting is seen as painted; they separate as it pushes in.
+  if (v[2] >= base[2] - 1e-6 && v[3] >= base[3] - 1e-6) return { sky: v, water: v, land: v };
   const look = [(state.mouseSmooth[0] - 0.5) * 0.03 * depth, (state.mouseSmooth[1] - 0.5) * 0.02 * depth];
   // The look-around stays on the canvas: with no push there is no margin,
   // so the planes only shift once the camera has pushed in.
@@ -705,24 +721,80 @@ transitionSel.addEventListener('change', () => {
   state.transitionOverride = transitionSel.value;
 });
 
+// Music and effects are on by default; a visitor who turns them off is
+// remembered. Browsers only let a page play sound after a click
+// or a key press, so until the first one the sound waits, and the Sound
+// button pulses to say so.
+const SOUND_KEY = 'turner-lumieres:sound';
 const soundBtn = $('soundBtn');
-async function toggleSound() {
-  if (ambient.on) {
-    ambient.stop();
-  } else {
-    try {
-      await ambient.start();
-      if (state.current) ambient.setMood(state.current.recipe.mood);
-      if (!ambient.trackFailed && ambient.music?.src.includes(BACKGROUND_TRACK.url)) status(`Music: ${BACKGROUND_TRACK.title}`, 4000);
-    } catch (err) {
-      console.warn(err);
-      status('Audio could not start in this browser.');
-    }
+let soundWanted = true;
+try {
+  soundWanted = localStorage.getItem(SOUND_KEY) !== 'off';
+} catch {
+  // Storage unavailable: keep the default.
+}
+
+function updateSoundBtn() {
+  soundBtn.classList.toggle('active', soundWanted);
+  soundBtn.classList.toggle('waiting', soundWanted && !ambient.on);
+  soundBtn.setAttribute('aria-pressed', String(soundWanted));
+}
+
+async function startSound() {
+  try {
+    await ambient.start();
+    if (state.current) ambient.setMood(state.current.recipe.mood);
+    if (!ambient.trackFailed && ambient.music?.src.includes(BACKGROUND_TRACK.url)) status(`Music: ${BACKGROUND_TRACK.title}`, 4000);
+  } catch (err) {
+    console.warn(err);
+    status('Audio could not start in this browser.');
   }
-  soundBtn.classList.toggle('active', ambient.on);
-  soundBtn.setAttribute('aria-pressed', String(ambient.on));
+  updateSoundBtn();
+}
+
+// The first click or key press anywhere starts the sound. The Sound button
+// and the S key are left to their own handler, which turns it off.
+function unlockSound(e) {
+  if (e.target?.closest?.('#soundBtn') || (e.type === 'keydown' && e.key.toLowerCase() === 's')) return;
+  disarmUnlock();
+  if (soundWanted && !ambient.on) startSound();
+}
+function armUnlock() {
+  window.addEventListener('pointerdown', unlockSound, true);
+  window.addEventListener('keydown', unlockSound, true);
+}
+function disarmUnlock() {
+  window.removeEventListener('pointerdown', unlockSound, true);
+  window.removeEventListener('keydown', unlockSound, true);
+}
+
+async function toggleSound() {
+  soundWanted = !soundWanted;
+  try {
+    localStorage.setItem(SOUND_KEY, soundWanted ? 'on' : 'off');
+  } catch {
+    // Not remembered, still applied.
+  }
+  disarmUnlock();
+  if (soundWanted) await startSound();
+  else ambient.stop();
+  updateSoundBtn();
 }
 soundBtn.addEventListener('click', toggleSound);
+
+// At launch: start at once where the browser allows it, otherwise wait for
+// the first click or key press.
+function initSound() {
+  updateSoundBtn();
+  if (!soundWanted) return;
+  ambient.setup();
+  if (ambient.ctx.state === 'running') {
+    startSound();
+  } else {
+    armUnlock();
+    status('Click anywhere or press a key to start the music.', 7000);
+  }
+}
 
 $('musicBtn').addEventListener('click', () => $('musicInput').click());
 $('musicInput').addEventListener('change', async (e) => {
@@ -730,8 +802,9 @@ $('musicInput').addEventListener('change', async (e) => {
   if (!file) return;
   try {
     await ambient.useMusic(file);
-    soundBtn.classList.add('active');
-    soundBtn.setAttribute('aria-pressed', 'true');
+    soundWanted = true;
+    disarmUnlock();
+    updateSoundBtn();
     status(`Playing ${file.name}. The light now follows the music.`);
   } catch (err) {
     console.warn(err);
@@ -1068,6 +1141,7 @@ async function boot() {
   requestAnimationFrame(frame);
   const start = state.entries.findIndex((e) => e.id === params.get('painting'));
   await goTo(Math.max(0, start));
+  initSound();
   wake();
 }
 
