@@ -1,8 +1,10 @@
-// Generative score and sound effects. The exhibitions are driven by a
-// soundtrack and the image is cut to it; here a small WebAudio ensemble
-// (pads, sea or wind noise, bells) plays a mood per painting, inside a long
-// synthetic reverb that stands in for the quarry's acoustics. Its level, or
-// the level of a track the visitor loads, feeds back into the light.
+// Music and sound effects. The exhibitions are driven by a soundtrack and
+// the image is cut to it. Here the background music is an original track,
+// Suspended by Light, looping through the whole show; a visitor can load
+// their own in its place. If the track cannot be played, a small WebAudio
+// ensemble (pads, sea or wind noise, bells) plays a mood per painting
+// instead, inside a long synthetic reverb that stands in for the quarry's
+// acoustics. The level of the music feeds back into the light.
 //
 // Over the score sits a soundscape per painting: what you would hear
 // standing in the scene. Continuous beds (rain, wind, fire) are shaped
@@ -45,7 +47,7 @@ const SCAPES = {
   tempest: { waves: 1, wind: 0.6, thunder: 0.6, creak: 0.5 },
   blizzard: { wind: 1, waves: 0.65, paddle: 0.4, shipBell: 0.35 },
   alps: { wind: 0.9, thunder: 0.8, horn: 0.5 },
-  fire: { roar: 1, crackle: 1.4, flare: 1, crash: 0.8, alarm: 0.45, lap: 0.15 },
+  fire: { roar: 0.3, crackle: 1, flare: 1, crash: 0.18, alarm: 0.3, lap: 0.15 },
   train: { train: 1, wind: 0.15 },
   light: { shimmer: 0.8, drips: 0.5, lap: 0.25 },
   none: {},
@@ -68,6 +70,8 @@ const EVERY = {
   alarm: [22, 38],
   shimmer: [1.8, 4.5],
 };
+
+export const BACKGROUND_TRACK = { url: 'audio/suspended-by-light.mp3', title: 'Suspended by Light' };
 
 const midiHz = (m) => 440 * 2 ** ((m - 69) / 12);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -98,6 +102,8 @@ export class Ambient {
     this.ctx = ctx;
     this.master = ctx.createGain();
     this.master.gain.value = 0;
+    this.musicBus = ctx.createGain();
+    this.musicBus.connect(this.master);
     const comp = ctx.createDynamicsCompressor();
     this.analyser = ctx.createAnalyser();
     this.analyser.fftSize = 512;
@@ -236,6 +242,7 @@ export class Ambient {
 
   async start() {
     this.setup();
+    if (!this.music && !this.trackFailed) this.loadTrack();
     await this.ctx.resume();
     this.on = true;
     this.master.gain.setTargetAtTime(0.75, this.ctx.currentTime, 1.2);
@@ -428,7 +435,8 @@ export class Ambient {
     }
     this.waterLevel = (sc.lap ?? 0) * (0.6 + 0.4 * clamp(scene.water ?? 0.4, 0, 1));
     if (this.waterLevel < 0.01) set('water', 0);
-    const roar = clamp(scene.fire ?? 0, 0, 1.2) * (sc.roar ? 1.2 : 0.5);
+    // The fire stays behind the music: a blaze heard across the river.
+    const roar = clamp(scene.fire ?? 0, 0, 1.2) * (sc.roar ?? 0.15);
     this.roarLevel = roar;
     this.flickerDepth.gain.setTargetAtTime(roar * 14, now, 0.3);
     if (roar < 0.01) {
@@ -707,7 +715,7 @@ export class Ambient {
     this.tone(at, 70, 0.6 * level, 1.6, { toHz: 30, glide: 0.9, attack: 0.008 });
     this.burst(at, 0.5, 'lowpass', 2400, 0.4 * level, { attack: 0.005 });
     this.burst(at + 0.05, 2.2, 'lowpass', 900, 0.35 * level, { attack: 0.15 });
-    for (let k = 0; k < 24; k++) this.crackle(at + rand(0.05, 2), 1.2);
+    for (let k = 0; k < 24; k++) this.crackle(at + rand(0.05, 2), level * 1.5);
   }
 
   // A surge of flame: the blaze draws breath and flares up.
@@ -900,20 +908,46 @@ export class Ambient {
     this.burst(at, len, 'highpass', 2600, 0.09, { attack: 0.05, out: this.trainBus });
   }
 
-  async useMusic(file) {
-    this.setup();
+  // Plays an audio element as the music, in place of the generated score.
+  setMusic(el) {
     if (this.music) {
       this.music.pause();
-      URL.revokeObjectURL(this.music.src);
+      if (this.music.src.startsWith('blob:')) URL.revokeObjectURL(this.music.src);
     }
-    const el = new Audio();
-    el.src = URL.createObjectURL(file);
     el.loop = true;
     this.music = el;
-    const src = this.ctx.createMediaElementSource(el);
-    src.connect(this.master);
-    await this.start();
+    this.ctx.createMediaElementSource(el).connect(this.musicBus);
     this.applyMood();
+  }
+
+  // The show's own track. Should it fail to load, the generated score
+  // takes over.
+  loadTrack() {
+    const el = new Audio(BACKGROUND_TRACK.url);
+    el.preload = 'auto';
+    el.addEventListener(
+      'error',
+      () => {
+        if (this.music !== el) return;
+        this.trackFailed = true;
+        this.music = null;
+        if (this.on) {
+          this.applyMood();
+          this.nextChord = this.ctx.currentTime + 0.1;
+        }
+      },
+      { once: true },
+    );
+    this.setMusic(el);
+  }
+
+  // A track the visitor loads replaces the background music.
+  async useMusic(file) {
+    this.setup();
+    const el = new Audio();
+    el.src = URL.createObjectURL(file);
+    this.setMusic(el);
+    await this.start();
     await el.play();
   }
 

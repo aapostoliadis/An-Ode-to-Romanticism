@@ -1,5 +1,5 @@
 import { analysePainting, autoRecipe, resolveRecipe } from './analysis.js';
-import { Ambient } from './audio.js';
+import { Ambient, BACKGROUND_TRACK } from './audio.js';
 import { segmentLayers } from './layers.js';
 import {
   ELEMENT_TYPES,
@@ -713,6 +713,7 @@ async function toggleSound() {
     try {
       await ambient.start();
       if (state.current) ambient.setMood(state.current.recipe.mood);
+      if (!ambient.trackFailed && ambient.music?.src.includes(BACKGROUND_TRACK.url)) status(`Music: ${BACKGROUND_TRACK.title}`, 4000);
     } catch (err) {
       console.warn(err);
       status('Audio could not start in this browser.');
