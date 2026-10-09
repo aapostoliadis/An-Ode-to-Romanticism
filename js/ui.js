@@ -16,69 +16,69 @@ export const CONTROL_GROUPS = [
   {
     title: 'Motion',
     items: [
-      { key: 'flow', label: 'Brushstroke flow', min: 0, max: 1.5, step: 0.01 },
-      { key: 'flowSpeed', label: 'Flow speed', min: 0.02, max: 0.5, step: 0.01 },
-      { key: 'flowFollow', label: 'Follow painted strokes', min: 0, max: 1, step: 0.01 },
-      { key: 'wind', label: 'Wind', min: 0, max: 1, step: 0.01 },
-      { key: 'windAngle', label: 'Wind direction', min: -180, max: 180, step: 1, unit: '°' },
-      { key: 'vortex', label: 'Vortex', min: 0, max: 1.5, step: 0.01 },
-      { key: 'vortexRadius', label: 'Vortex size', min: 0.1, max: 1, step: 0.01 },
+      { key: 'flow', label: 'Brushstroke flow', min: 0, max: 1.5, step: 0.01, hint: 'How strongly the paint moves along its own brushstrokes.' },
+      { key: 'flowSpeed', label: 'Flow speed', min: 0.02, max: 0.5, step: 0.01, hint: 'How fast the paint travels along the strokes.' },
+      { key: 'flowFollow', label: 'Follow painted strokes', min: 0, max: 1, step: 0.01, hint: 'At 1 the paint follows the painted strokes exactly; lower lets the wind and vortex steer it.' },
+      { key: 'wind', label: 'Wind', min: 0, max: 1, step: 0.01, hint: 'Strength of the drift that carries paint, clouds, mist and smoke.' },
+      { key: 'windAngle', label: 'Wind direction', min: -180, max: 180, step: 1, unit: '°', hint: 'The direction the wind blows, in degrees.' },
+      { key: 'vortex', label: 'Vortex', min: 0, max: 1.5, step: 0.01, hint: 'Strength of the swirl around the vortex marker (◎).' },
+      { key: 'vortexRadius', label: 'Vortex size', min: 0.1, max: 1, step: 0.01, hint: 'How far the swirl reaches from its centre.' },
     ],
   },
   {
     title: 'Layers',
     items: [
-      { key: 'skyDrift', label: 'Clouds drift', min: 0, max: 1.5, step: 0.01 },
-      { key: 'landSway', label: 'Foliage stirs', min: 0, max: 1.5, step: 0.01 },
-      { key: 'brush', label: 'Brush texture lives', min: 0, max: 1.2, step: 0.01 },
-      { key: 'lightDrift', label: 'Drifting light', min: 0, max: 1.2, step: 0.01 },
-      { key: 'parallax', label: 'Depth between layers', min: 0, max: 1.5, step: 0.01 },
+      { key: 'skyDrift', label: 'Clouds drift', min: 0, max: 1.5, step: 0.01, hint: 'How much the sky layer drifts and swirls on its own.' },
+      { key: 'landSway', label: 'Foliage stirs', min: 0, max: 1.5, step: 0.01, hint: 'Gusts through trees, grass and banks on the land layer.' },
+      { key: 'brush', label: 'Brush texture lives', min: 0, max: 1.2, step: 0.01, hint: 'The brushwork shimmers along each stroke, without the image itself moving.' },
+      { key: 'lightDrift', label: 'Drifting light', min: 0, max: 1.2, step: 0.01, hint: 'Soft passes of light and shade travelling over the land and water.' },
+      { key: 'parallax', label: 'Depth between layers', min: 0, max: 1.5, step: 0.01, hint: 'How far apart sky, water and land move as the camera pushes in, which gives the canvas depth.' },
     ],
   },
   {
     title: 'Light',
     items: [
-      { key: 'sunColor', label: 'Light colour', type: 'color' },
-      { key: 'glow', label: 'Glow', min: 0, max: 1.5, step: 0.01 },
-      { key: 'rays', label: 'Light rays', min: 0, max: 1.5, step: 0.01 },
-      { key: 'breathe', label: 'Breathing', min: 0, max: 1, step: 0.01 },
-      { key: 'grade', label: 'Warmth', min: 0, max: 1, step: 0.01 },
+      { key: 'sunColor', label: 'Light colour', type: 'color', hint: 'Colour of the glow and the rays.' },
+      { key: 'glow', label: 'Glow', min: 0, max: 1.5, step: 0.01, hint: 'Size and strength of the glow around the light marker (☀).' },
+      { key: 'rays', label: 'Light rays', min: 0, max: 1.5, step: 0.01, hint: 'Rays of light streaming out from the light marker.' },
+      { key: 'breathe', label: 'Breathing', min: 0, max: 1, step: 0.01, hint: 'How much the light swells and fades over time and with the music.' },
+      { key: 'grade', label: 'Warmth', min: 0, max: 1, step: 0.01, hint: 'A warm colour grade over the whole painting.' },
     ],
   },
   {
     title: 'Water and air',
     items: [
-      { key: 'water', label: 'Water ripples', min: 0, max: 1.5, step: 0.01 },
-      { key: 'mist', label: 'Mist', min: 0, max: 1.2, step: 0.01 },
-      { key: 'smoke', label: 'Smoke or steam', min: 0, max: 1, step: 0.01 },
-      { key: 'smokeColor', label: 'Smoke colour', type: 'color' },
+      { key: 'water', label: 'Water ripples', min: 0, max: 1.5, step: 0.01, hint: 'Ripples on the water below the horizon, stronger toward you.' },
+      { key: 'mist', label: 'Mist', min: 0, max: 1.2, step: 0.01, hint: 'Drifting mist, densest along the horizon.' },
+      { key: 'smoke', label: 'Smoke or steam', min: 0, max: 1, step: 0.01, hint: 'A plume of smoke or steam rising from the smoke marker (≋) and bending with the wind.' },
+      { key: 'smokeColor', label: 'Smoke colour', type: 'color', hint: 'Colour of the smoke or steam.' },
     ],
   },
   {
     title: 'Weather and fire',
     items: [
-      { key: 'rain', label: 'Rain', min: 0, max: 1, step: 0.01 },
-      { key: 'rainAngle', label: 'Rain angle', min: -45, max: 45, step: 1, unit: '°' },
-      { key: 'snow', label: 'Snow and spray', min: 0, max: 1, step: 0.01 },
-      { key: 'fire', label: 'Fire flicker', min: 0, max: 1.2, step: 0.01 },
-      { key: 'embers', label: 'Embers', min: 0, max: 1.2, step: 0.01 },
+      { key: 'rain', label: 'Rain', min: 0, max: 1, step: 0.01, hint: 'Slanting rain streaks over the whole painting.' },
+      { key: 'rainAngle', label: 'Rain angle', min: -45, max: 45, step: 1, unit: '°', hint: 'How steeply the rain slants.' },
+      { key: 'snow', label: 'Snow and spray', min: 0, max: 1, step: 0.01, hint: 'Snow or spray falling from top to bottom at three depths.' },
+      { key: 'fire', label: 'Fire flicker', min: 0, max: 1.2, step: 0.01, hint: 'Warm, bright areas flicker and glow like flames.' },
+      { key: 'embers', label: 'Embers', min: 0, max: 1.2, step: 0.01, hint: 'Sparks rising above the fire.' },
     ],
   },
   {
     title: 'Camera and show',
     items: [
       // Shown as the push itself: 0.00 is no push (the stored zoom is 1).
-      { key: 'zoom', label: 'Camera push', min: 1, max: 2.5, step: 0.01, shift: -1 },
-      { key: 'duration', label: 'Time on the wall', min: 12, max: 120, step: 1, unit: 's' },
-      { key: 'transition', label: 'Arrives with', type: 'select', options: TRANSITIONS },
+      { key: 'zoom', label: 'Camera push', min: 1, max: 2.5, step: 0.01, shift: -1, hint: 'How far the camera moves in toward the focus marker (✛). Every painting opens at 0.00, with the painting filling the screen, then eases in to this amount.' },
+      { key: 'duration', label: 'Time on the wall', min: 12, max: 120, step: 1, unit: 's', hint: 'Seconds on the wall before the show moves on to the next painting.' },
+      { key: 'transition', label: 'Arrives with', type: 'select', options: TRANSITIONS, hint: 'How this painting arrives: brushstroke wipe, watercolour bleed, flood of light, paint flowing away, through darkness or mosaic tiles.' },
     ],
   },
   {
     title: 'Sound',
     items: [
-      { key: 'mood', label: 'Score', type: 'select', options: MOOD_OPTIONS },
-      { key: 'sounds', label: 'Sound effects', type: 'select', options: SOUNDSCAPES },
-      { key: 'sfx', label: 'Effects level', min: 0, max: 1.5, step: 0.01 },
+      { key: 'mood', label: 'Mood', type: 'select', options: MOOD_OPTIONS, hint: 'The mood of the painting. It picks the matching soundscape, and the generated music used if the track cannot play.' },
+      { key: 'sounds', label: 'Sound effects', type: 'select', options: SOUNDSCAPES, hint: 'The soundscape heard under the music, or the one that matches the mood.' },
+      { key: 'sfx', label: 'Effects level', min: 0, max: 1.5, step: 0.01, hint: 'Volume of the sound effects under the music.' },
     ],
   },
 ];
@@ -137,6 +137,7 @@ export function buildEditor(container, onChange) {
         });
       }
       input.id = id;
+      if (item.hint) row.title = item.hint;
       row.append(label, input);
       section.append(row);
       inputs.set(item.key, { input, out, item });
@@ -153,6 +154,25 @@ export function buildEditor(container, onChange) {
       }
     },
   };
+}
+
+// The editor's controls as a reference list for the help, from the same
+// definitions as the editor so the two never drift apart.
+export function buildControlsHelp(container) {
+  for (const group of CONTROL_GROUPS) {
+    const h = document.createElement('h4');
+    h.textContent = group.title;
+    const dl = document.createElement('dl');
+    dl.className = 'help-list';
+    for (const item of group.items) {
+      const dt = document.createElement('dt');
+      dt.textContent = item.label;
+      const dd = document.createElement('dd');
+      dd.textContent = item.hint ?? '';
+      dl.append(dt, dd);
+    }
+    container.append(h, dl);
+  }
 }
 
 export function buildGallery(container, onSelect) {
@@ -313,9 +333,10 @@ export function buildElementsEditor(container, { onChange, onAdd, onRemove }) {
   add.addEventListener('click', onAdd);
   container.append(list, add);
 
-  const slider = (label, value, min, max, step, onInput) => {
+  const slider = (label, value, min, max, step, onInput, hint = '') => {
     const row = document.createElement('div');
     row.className = 'row';
+    if (hint) row.title = hint;
     const lab = document.createElement('label');
     const name = document.createElement('span');
     name.textContent = label;
@@ -369,9 +390,9 @@ export function buildElementsEditor(container, { onChange, onAdd, onRemove }) {
         card.append(
           head,
           typeRow,
-          slider('Motion', el.amount ?? 1, 0, 2, 0.01, (v) => onChange(i, 'amount', v)),
-          slider('Size', el.rx, 0.02, 0.35, 0.005, (v) => onChange(i, 'size', v)),
-          slider('Tilt', el.angle ?? 0, -75, 75, 1, (v) => onChange(i, 'angle', v)),
+          slider('Motion', el.amount ?? 1, 0, 2, 0.01, (v) => onChange(i, 'amount', v), 'How much the element moves. 0 holds it still.'),
+          slider('Size', el.rx, 0.02, 0.35, 0.005, (v) => onChange(i, 'size', v), 'Size of the area cut out, shown by the dashed outline.'),
+          slider('Tilt', el.angle ?? 0, -75, 75, 1, (v) => onChange(i, 'angle', v), 'Turns the cut-out area to lie along a diagonal object, like a train on its track.'),
         );
         list.append(card);
       });

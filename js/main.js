@@ -24,7 +24,7 @@ import {
 } from './paintings.js';
 import { Recorder } from './recorder.js';
 import { Renderer } from './renderer.js';
-import { Handles, buildEditor, buildElementsEditor, buildGallery } from './ui.js';
+import { Handles, buildControlsHelp, buildEditor, buildElementsEditor, buildGallery } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('stage');
@@ -751,7 +751,7 @@ function toggleRecord() {
     status('Recording saved.');
   } else {
     recorder.start(ambient.stream, fileName());
-    status(ambient.on ? 'Recording video with sound. Press again to stop.' : 'Recording video. Turn sound on to include the score.');
+    status(ambient.on ? 'Recording video with sound. Press again to stop.' : 'Recording video. Turn sound on to include the music.');
   }
   recordBtn.textContent = recorder.recording ? 'Stop' : 'Record';
   recordBtn.classList.toggle('active', recorder.recording);
@@ -768,6 +768,18 @@ function toggleFullscreen() {
 }
 
 $('helpBtn').addEventListener('click', () => $('helpDialog').showModal());
+
+// The help lists the editor's controls from their own definitions, and its
+// section links scroll within the dialog.
+buildControlsHelp($('helpControls'));
+const helpBody = $('helpDialog').querySelector('.help-body');
+$('helpDialog').querySelectorAll('.help-nav a').forEach((a) => {
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    const target = helpBody.querySelector(a.getAttribute('href'));
+    if (target) helpBody.scrollTop += target.getBoundingClientRect().top - helpBody.getBoundingClientRect().top - 8;
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Editor

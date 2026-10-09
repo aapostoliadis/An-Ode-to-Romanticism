@@ -117,33 +117,240 @@
       </form>
     </dialog>
 
-    <dialog id="helpDialog" class="dialog wide">
+    <dialog id="helpDialog" class="dialog wide help" aria-labelledby="helpTitle">
       <form method="dialog">
-        <h2>How the paintings come alive</h2>
-        <p>
-          The Carrières des Lumières shows (Culturespaces, AMIEX process) project thousands of digitised artworks across
-          7,000 m² of quarry walls, pillars and floor, set in motion and cut to a soundtrack. This program rebuilds that
-          vocabulary in real time on the GPU.
-        </p>
-        <ol class="techniques">
-          <li><strong>Strokes that move.</strong> The direction of every brushstroke is measured from the image, and the paint is advected along it with a looping flow map, so skies and seas churn the way Turner painted them.</li>
-          <li><strong>Layers.</strong> Each painting is separated into sky, water and land, with figures cut out and the brush texture lifted off the colour. Clouds drift, water ripples, foliage stirs, light drifts and the paint swirls, each layer on its own.</li>
-          <li><strong>Depth.</strong> The layers follow the camera at slightly different speeds, sky least and land most, so the flat canvas opens up in depth.</li>
-          <li><strong>Slow camera.</strong> Each painting gets a long push toward its focal point and an easing pull back.</li>
-          <li><strong>Moving elements.</strong> Objects are cut out of the painting, the background behind them is repainted, and they move: the train sets off from where Turner painted it and runs down the viaduct toward you, boats pitch on the swell, suns rise and set.</li>
-          <li><strong>Living atmosphere.</strong> Mist drifts, smoke and steam rise, fire flickers, embers rise, rain slants and snow falls.</li>
-          <li><strong>Light.</strong> A breathing glow and god rays from the light source, pulsing with the music.</li>
-          <li><strong>Sound.</strong> Suspended by Light plays as the background music, with a soundscape for each painting under it: surf and gulls, birdsong on the river, wind and thunder, the fire across the river, rain and the train whistling as it comes closer.</li>
-          <li><strong>The painting paints itself.</strong> Colour washes first, then the strokes, spreading out from the light.</li>
-          <li><strong>Transitions.</strong> Brushstroke wipes, watercolour bleeds, floods of light, melting paint, mosaics.</li>
-        </ol>
-        <h3>Shortcuts</h3>
-        <p class="keys">
-          <kbd>←</kbd> <kbd>→</kbd> paintings · <kbd>Space</kbd> play or pause · <kbd>E</kbd> edit ·
-          <kbd>S</kbd> sound · <kbd>R</kbd> record · <kbd>F</kbd> fullscreen · <kbd>H</kbd> hide interface. Move the pointer over the
-          painting to stir the paint, drag to stir harder.
-        </p>
-        <p class="credits">Paintings by J. M. W. Turner (1775 to 1851), public-domain reproductions from Wikimedia Commons. Music: Suspended by Light.</p>
+        <header class="help-head">
+          <h2 id="helpTitle">Using An Ode to Romanticism</h2>
+          <button value="close" class="icon" title="Close help (Esc)" aria-label="Close help">×</button>
+        </header>
+        <nav class="help-nav" aria-label="Help sections">
+          <a href="#help-show">The show</a>
+          <a href="#help-bar">Top bar</a>
+          <a href="#help-paintings">Paintings</a>
+          <a href="#help-edit">Editing</a>
+          <a href="#help-elements">Moving elements</a>
+          <a href="#help-sound">Sound</a>
+          <a href="#help-save">Saving</a>
+          <a href="#help-keys">Keys</a>
+          <a href="#help-how">How it works</a>
+        </nav>
+        <div class="help-body">
+          <section id="help-show">
+            <h3>The show</h3>
+            <p>
+              Nine paintings by J. M. W. Turner play one after another in five chapters: Dawn, The sea, Tempest, Fire and speed,
+              and Light and colour. Each painting arrives with its own transition, paints itself in (colour first, then the
+              strokes), and stays on the wall for 38 seconds (Time on the wall in the editor changes this), its title fading in
+              and out. The camera opens on the
+              painting filling the screen, slowly pushes in toward its focal point and draws back. After the last painting the
+              show starts again.
+            </p>
+            <p>
+              Move the pointer over the painting to stir the wet paint; press and drag to stir harder. During the show the
+              controls fade away after a few seconds; move the pointer to bring them back. If your system asks for reduced motion,
+              the show starts paused and every movement is gentler.
+            </p>
+          </section>
+
+          <section id="help-bar">
+            <h3>Top bar</h3>
+            <dl class="help-list">
+              <dt><kbd>‹</kbd> <kbd>›</kbd></dt>
+              <dd>Previous or next painting.</dd>
+              <dt><kbd>❚❚</kbd> <kbd>▶</kbd></dt>
+              <dd>Pause or play the show. Paused, the painting stays on the wall and keeps moving, but the show does not move on.</dd>
+              <dt>Transitions</dt>
+              <dd>Leave it on "as scored" so each painting arrives its own way, or pick one transition for every painting: brushstroke wipe, watercolour bleed, flood of light, paint flowing away, through darkness or mosaic tiles.</dd>
+              <dt>Sound</dt>
+              <dd>Turns the music and the sound effects on or off. Browsers only allow sound after a click, so the show starts silent.</dd>
+              <dt>Music</dt>
+              <dd>Plays an audio file of your own in place of Suspended by Light. The light then pulses with your track.</dd>
+              <dt>Record</dt>
+              <dd>Records a video of the show; press Stop to save it. See Saving.</dd>
+              <dt><kbd>◉</kbd></dt>
+              <dd>Saves a still image of the current frame.</dd>
+              <dt>Edit</dt>
+              <dd>Opens the editor for the painting on the wall. See Editing.</dd>
+              <dt><kbd>⤢</kbd></dt>
+              <dd>Fullscreen on or off.</dd>
+              <dt><kbd>?</kbd></dt>
+              <dd>This help.</dd>
+            </dl>
+          </section>
+
+          <section id="help-paintings">
+            <h3>Paintings</h3>
+            <p>
+              The strip at the bottom holds every painting in the show. Click one to go to it; the bar along the bottom of the
+              current tile shows how long it has left on the wall.
+            </p>
+            <p>
+              <strong>Your painting</strong> adds any image to the show. Choose a file, paste the address of an image, or drag an
+              image file onto the window. The program measures its brushstrokes, finds the light source and the horizon,
+              separates sky, water and land, and writes a starting animation for it (warm, bright images get fire). Files always
+              work. Some websites do not share their images' pixels, so an address from them cannot be animated; download the
+              image and add the file instead. Added paintings stay for the session, and their edits are kept in the browser.
+            </p>
+            <p>
+              The Turner reproductions come from Wikimedia Commons. If it cannot be reached, a painted study, labelled as such,
+              stands in for the painting so the show still runs.
+            </p>
+          </section>
+
+          <section id="help-edit">
+            <h3>Editing a painting</h3>
+            <p>
+              <strong>Edit</strong> holds the show on this painting and fits the whole of it beside the editor panel, with markers
+              you can drag. Every change applies at once and is saved in this browser for that painting. Close the editor with × or
+              <kbd>Esc</kbd>.
+            </p>
+            <dl class="help-list">
+              <dt>☀ Light</dt>
+              <dd>The light source: the glow, the rays and the drifting light come from here.</dd>
+              <dt>◎ Vortex</dt>
+              <dd>The centre of the swirl (shown when Vortex is above zero).</dd>
+              <dt>✛ Focus</dt>
+              <dd>Where the camera pushes in to.</dd>
+              <dt>≋ Smoke</dt>
+              <dd>Where smoke or steam rises from (shown when Smoke is above zero).</dd>
+              <dt>Horizon</dt>
+              <dd>The dashed line dividing sky from water and land. Dragging it separates the layers again.</dd>
+              <dt>1, 2, 3 and ⊙</dt>
+              <dd>Moving elements and the point an approaching element comes from. See Moving elements.</dd>
+              <dt>Show the layers</dt>
+              <dd>Tints the sky blue, the water teal and the land green, to check how the painting has been separated.</dd>
+            </dl>
+            <p>The sliders and choices in the panel, group by group (hover over any of them in the editor for the same note):</p>
+            <div id="helpControls" class="help-controls"></div>
+            <dl class="help-list">
+              <dt>Reset</dt>
+              <dd>Returns the painting to its original animation and forgets your edits.</dd>
+              <dt>Re-detect light</dt>
+              <dd>Places the light and the camera focus on the brightest area of the painting.</dd>
+              <dt>Export</dt>
+              <dd>Saves this painting's animation as a JSON file.</dd>
+              <dt>Import</dt>
+              <dd>Applies an exported animation file to the painting on the wall, for example on another computer.</dd>
+            </dl>
+          </section>
+
+          <section id="help-elements">
+            <h3>Moving elements</h3>
+            <p>
+              Moving elements are objects cut out of the painting and set in motion, like the train on the viaduct or a boat on
+              the swell. The painting behind them is repainted, so nothing is left behind when they move. Up to three per painting.
+            </p>
+            <p>
+              Press <strong>Add moving element</strong>, drag its numbered marker onto the object and choose how it moves. The
+              dashed outline is the area that is cut out.
+            </p>
+            <dl class="help-list">
+              <dt>Comes toward the viewer</dt>
+              <dd>Sets off from where it is painted and runs toward you in perspective, growing and gathering speed, then the next one appears in its place. Drag the ⊙ marker up the track or road behind it, to the point it comes from.</dd>
+              <dt>Drifts across</dt>
+              <dd>Glides slowly sideways over the length of the painting's time on the wall, bobbing a little.</dd>
+              <dt>Rocks on the waves</dt>
+              <dd>Pitches and bobs about its waterline, like a ship on the swell.</dd>
+              <dt>Rises or sets</dt>
+              <dd>Climbs or sinks slowly, like the sun.</dd>
+              <dt>Pulses</dt>
+              <dd>Swells and settles gently, like a breathing light.</dd>
+              <dt>Motion</dt>
+              <dd>How much it moves; 0 holds it still.</dd>
+              <dt>Size</dt>
+              <dd>Fits the outline to the object.</dd>
+              <dt>Tilt</dt>
+              <dd>Turns the outline to lie along a diagonal object.</dd>
+              <dt>Remove</dt>
+              <dd>Puts the object back into the painting.</dd>
+            </dl>
+            <p>
+              Compact objects that stand out from their surroundings cut best, such as a dark boat on bright water or a sun in
+              haze. An object painted in the same colours as what surrounds it moves only partly. The train in Rain, Steam and
+              Speed uses an outline traced by hand around the engine, which is why it moves whole.
+            </p>
+          </section>
+
+          <section id="help-sound">
+            <h3>Sound</h3>
+            <p>
+              Press <strong>Sound</strong> to start the music, Suspended by Light, which loops through the whole show. Under it each
+              painting has its own sound effects: surf, gulls and creaking timber for Ulysses, the river and birdsong at Norham,
+              the tug's engine and a ship's bell for the Temeraire, storms with wind and thunder at sea and in the Alps, the fire
+              across the river with its alarm bells, glassy tones of light, and the train, which whistles as it sets off and grows
+              louder and quicker as it comes toward you. The light of the painting pulses with the music.
+            </p>
+            <p>
+              The effects follow the sliders: more rain, snow or fire in the editor means more of it in the sound. In the editor's
+              Sound group, <strong>Mood</strong> sets the character of the painting, <strong>Sound effects</strong> picks a different
+              soundscape (or "No effects"), and <strong>Effects level</strong> sets how loud they are under the music.
+              <strong>Music</strong> in the top bar plays your own track instead of Suspended by Light.
+            </p>
+          </section>
+
+          <section id="help-save">
+            <h3>Saving</h3>
+            <p>
+              <strong>Record</strong> records the painting exactly as it plays, titles included and without the controls, as a
+              WebM video (MP4 in Safari), with the music and effects when sound is on. Press <strong>Stop</strong> and the video downloads. The <kbd>◉</kbd> button saves the
+              current frame as a PNG image. Edits to a painting are saved automatically in this browser; use Export and Import in
+              the editor to move them to another computer.
+            </p>
+          </section>
+
+          <section id="help-keys">
+            <h3>Keys</h3>
+            <dl class="help-list keys">
+              <dt><kbd>←</kbd> <kbd>→</kbd></dt>
+              <dd>Previous or next painting</dd>
+              <dt><kbd>Space</kbd></dt>
+              <dd>Play or pause the show</dd>
+              <dt><kbd>E</kbd></dt>
+              <dd>Open or close the editor</dd>
+              <dt><kbd>Esc</kbd></dt>
+              <dd>Close the editor or this help</dd>
+              <dt><kbd>S</kbd></dt>
+              <dd>Sound on or off</dd>
+              <dt><kbd>R</kbd></dt>
+              <dd>Start or stop recording</dd>
+              <dt><kbd>F</kbd></dt>
+              <dd>Fullscreen</dd>
+              <dt><kbd>H</kbd></dt>
+              <dd>Hide or show the controls</dd>
+              <dt><kbd>?</kbd></dt>
+              <dd>This help</dd>
+            </dl>
+            <p>
+              Links can open the show on a chosen painting or paused: add <code>?painting=temeraire</code> (other paintings:
+              ulysses, norham, slave-ship, steam-boat, hannibal, burning, rain-steam-speed, light-and-colour) or
+              <code>?autoplay=0</code> to the address. On slower computers the picture lowers its own resolution to stay
+              smooth. The show runs best in a recent Chrome, Edge or Safari.
+            </p>
+          </section>
+
+          <section id="help-how">
+            <h3>How the paintings come alive</h3>
+            <p>
+              The Carrières des Lumières shows (Culturespaces, AMIEX process) project thousands of digitised artworks across
+              7,000 m² of quarry walls, pillars and floor, set in motion and cut to a soundtrack. This program rebuilds that
+              vocabulary in real time on the GPU.
+            </p>
+            <ol class="techniques">
+              <li><strong>Strokes that move.</strong> The direction of every brushstroke is measured from the image, and the paint is advected along it with a looping flow map, so skies and seas churn the way Turner painted them.</li>
+              <li><strong>Layers.</strong> Each painting is separated into sky, water and land, with figures cut out and the brush texture lifted off the colour. Clouds drift, water ripples, foliage stirs, light drifts and the paint swirls, each layer on its own.</li>
+              <li><strong>Depth.</strong> The layers follow the camera at slightly different speeds, sky least and land most, so the flat canvas opens up in depth.</li>
+              <li><strong>Slow camera.</strong> Each painting opens with no push, then the camera moves in toward its focal point and eases back.</li>
+              <li><strong>Moving elements.</strong> Objects are cut out of the painting, the background behind them is repainted, and they move: the train sets off from where Turner painted it and runs down the viaduct toward you, boats pitch on the swell, suns rise and set.</li>
+              <li><strong>Living atmosphere.</strong> Mist drifts, smoke and steam rise, fire flickers, embers rise, rain slants and snow falls.</li>
+              <li><strong>Light.</strong> A breathing glow and rays from the light source, pulsing with the music.</li>
+              <li><strong>Sound.</strong> Suspended by Light plays as the background music, with a soundscape for each painting under it.</li>
+              <li><strong>The painting paints itself.</strong> Colour washes first, then the strokes, spreading out from the light.</li>
+              <li><strong>Transitions.</strong> Brushstroke wipes, watercolour bleeds, floods of light, melting paint, mosaics.</li>
+            </ol>
+          </section>
+
+          <p class="credits">Paintings by J. M. W. Turner (1775 to 1851), public-domain reproductions from Wikimedia Commons. Music: Suspended by Light.</p>
+        </div>
         <div class="dialog-actions">
           <button value="close" class="primary">Close</button>
         </div>

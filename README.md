@@ -95,7 +95,7 @@ Press **Edit** to shape it. The painting is fitted beside the panel with markers
 
 Under **Moving elements**, press **Add moving element**, drag its numbered marker onto an object and choose how it moves: comes toward the viewer, drifts across, rocks on the waves, rises or sets, or pulses. The dashed outline is the area that is cut; the **Size** slider fits it to the object, **Tilt** turns it to lie along a diagonal object and **Motion** sets how much it moves. An element that comes toward the viewer gets a second marker (⊙) for the point it comes from: it sets off from where it is painted and runs along the line from that point toward you, so place the marker up the track or road behind it. Compact objects that stand out from their surroundings (a dark boat on bright water, a sun in haze) cut best; an object painted in the same colours as what surrounds it moves only partly.
 
-**Record** saves a WebM video of the canvas, with the music and effects when sound is on, and the ◉ button saves a still. Keyboard: arrows change painting, space plays or pauses, E edits, S toggles sound, R records, F goes fullscreen, H hides the interface.
+The **?** button (or the ? key) opens a full guide to every control, with a note for each slider of the editor; the same notes appear when you hover over the sliders. **Record** saves a WebM video of the canvas, with the music and effects when sound is on, and the ◉ button saves a still. Keyboard: arrows change painting, space plays or pauses, E edits, S toggles sound, R records, F goes fullscreen, H hides the interface.
 
 ## Files
 
