@@ -24,6 +24,7 @@ export const ELEMENT_TYPES = [
   { id: 'rock', label: 'Rocks on the waves' },
   { id: 'rise', label: 'Rises or sets' },
   { id: 'pulse', label: 'Pulses' },
+  { id: 'fly', label: 'Flies away' },
 ];
 
 // pivot: where rotation happens, as a fraction of the half height below
@@ -31,20 +32,34 @@ export const ELEMENT_TYPES = [
 // approach: zNear is the depth the element reaches before it leaves (0.25
 // means it ends four times nearer, and larger); delay is how
 // long it waits where it is painted before it sets off, in seconds.
+// anchor: when a drifting or rocking element is where it is painted, as a
+// fraction of the painting's time (0.5 by default: it starts half its
+// travel back and ends half ahead; 0 starts exactly as painted).
+// fly: a bird leaves from where it is painted, travels (dx, dy) over one
+// flight with beating wings (flap), shrinking a little into the distance,
+// fades, and the next one arrives in its place.
 const TYPE_DEFAULTS = {
   approach: { period: 13, vx: 'auto', vy: 'auto', zNear: 0.25, delay: 3, phase: 0 },
   drift: { dx: 0.05, dy: 0, bob: 0.005, rock: 0.015, period: 8, pivot: 0.6, foam: 0.3 },
   rock: { dx: 0, dy: 0, bob: 0.008, rock: 0.05, period: 4.5, pivot: 0.8, foam: 0.5 },
   rise: { dx: 0, dy: -0.05, bob: 0, rock: 0, period: 10, pivot: 0 },
   pulse: { pulse: 0.06, period: 7 },
+  fly: { dx: -0.25, dy: -0.03, bob: 0.004, period: 16, delay: 2, flap: 0.6 },
 };
 
 // angle: tilt of the cut-out ellipse in degrees (clockwise), so a long
 // object lying on a diagonal, like a train, is cut tightly.
-// foam: white water at the waterline; flags: how much red pennants flutter.
-const BASE = { type: 'drift', x: 0.5, y: 0.5, rx: 0.08, ry: 0.08, angle: 0, matte: 'auto', amount: 1, foam: 0, flags: 0, smoke: false, light: false };
+// foam: white water at the waterline, foamAt below the centre and foamX
+// toward the bow (fractions of the half height and half width), foamW its
+// half width; flags: how much red flags flutter, above flagLine
+// (a height on the painting, 0 at the top) or above the centre without one.
+// soft: how soft the edge of a traced outline is (1 is a couple of pixels).
+const BASE = {
+  type: 'drift', x: 0.5, y: 0.5, rx: 0.08, ry: 0.08, angle: 0, matte: 'auto', amount: 1, foam: 0, flags: 0, soft: 1, smoke: false, light: false,
+};
 const NUMBER_KEYS = [
   'x', 'y', 'rx', 'ry', 'angle', 'amount', 'period', 'vx', 'vy', 'zNear', 'delay', 'phase', 'dx', 'dy', 'bob', 'rock', 'pivot', 'pulse', 'foam', 'flags',
+  'anchor', 'flap', 'soft', 'foamAt', 'foamX', 'foamW', 'flagLine',
 ];
 const MATTES = ['auto', 'dark', 'light', 'ellipse'];
 
@@ -61,8 +76,8 @@ export function makeElement(partial = {}) {
 
 // Switching type keeps the region and swaps in that type's motion.
 export function retypeElement(el, type) {
-  const { x, y, rx, ry, angle, matte, amount, smoke, light, shape, flags } = el;
-  return makeElement({ x, y, rx, ry, angle, matte, amount, smoke, light, shape, flags, type });
+  const { x, y, rx, ry, angle, matte, amount, smoke, light, shape, flags, flagLine, soft } = el;
+  return makeElement({ x, y, rx, ry, angle, matte, amount, smoke, light, shape, flags, flagLine, soft, type });
 }
 
 // An outline is a list of [along, across] points in the element's own
@@ -175,8 +190,12 @@ export function estimateVanishing(analysis, el) {
 
 // Resolve authored placeholders ('sun', snapping) once per painting. Moves
 // the recipe's smoke source along with an element it is attached to.
-export function resolveElements(recipe, analysis) {
-  return (recipe.elements ?? []).slice(0, MAX_ELEMENTS).map((raw) => {
+// study: false when the painting could not be loaded and a painted study
+// stands in; elements placed on details of the painting itself (onStudy:
+// false) are left out there, as the study has nothing at that spot.
+export function resolveElements(recipe, analysis, { study = false } = {}) {
+  const list = (recipe.elements ?? []).filter((raw) => !study || raw.onStudy !== false);
+  return list.slice(0, MAX_ELEMENTS).map((raw) => {
     const el = makeElement(raw);
     if (el.x === 'sun') el.x = recipe.sunX;
     if (el.y === 'sun') el.y = recipe.sunY;
@@ -192,6 +211,7 @@ export function resolveElements(recipe, analysis) {
     if (el.type === 'approach' && (el.vx === 'auto' || el.vy === 'auto')) Object.assign(el, estimateVanishing(analysis, el));
     delete el.snap;
     delete el.snapRadius;
+    delete el.onStudy;
     return el;
   });
 }
@@ -199,7 +219,7 @@ export function resolveElements(recipe, analysis) {
 export function elementsKey(elements) {
   return JSON.stringify(
     elements.map((e) => [
-      ...[e.x, e.y, e.rx, e.ry, e.angle ?? 0, e.matte].map((v) => (typeof v === 'number' ? v.toFixed(4) : v)),
+      ...[e.x, e.y, e.rx, e.ry, e.angle ?? 0, e.matte, e.soft ?? 1].map((v) => (typeof v === 'number' ? v.toFixed(4) : v)),
       e.shape ?? null,
     ]),
   );
@@ -355,9 +375,9 @@ function computeMatte(data, b) {
       }
     }
   }
-  if (b.shape) return shapeMatte(b, ell, lx, ly);
   ringLum.sort((p, q) => p - q);
   const bgLum = ringLum.length ? ringLum[ringLum.length >> 1] : 0.5;
+  if (b.shape) return shapeMatte(b, ell, lx, ly, lum, bgLum);
   const palettes = ring.map((list) => {
     const step = Math.max(1, Math.floor(list.length / 400));
     const samples = [];
@@ -413,7 +433,10 @@ function computeMatte(data, b) {
 
 // A traced outline: everything inside it is the element, with a soft edge
 // a couple of pixels wide. The hole to repaint reaches a little further, so
-// no rim of the object is left painted on the background.
+// no rim of the object is left painted on the background. With a dark (or
+// light) matte only the paint inside the outline that is darker (lighter)
+// than its surroundings is taken: the masts and rigging of a ship against
+// the sky, without the sky between them.
 function insidePolygon(px, py, pts) {
   let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
@@ -424,16 +447,20 @@ function insidePolygon(px, py, pts) {
   return inside;
 }
 
-function shapeMatte(b, ell, lx, ly) {
+function shapeMatte(b, ell, lx, ly, lum, bgLum) {
   const { bw, bh } = b;
   const n = bw * bh;
   let matte = new Float32Array(n);
   for (let k = 0; k < n; k++) {
-    if (ell[k] < 1.8 && insidePolygon(lx[k], ly[k], b.shape)) matte[k] = 1;
+    if (ell[k] < 1.8 && insidePolygon(lx[k], ly[k], b.shape)) {
+      if (b.matte === 'dark') matte[k] = smoothstep(0.02, 0.12, bgLum - lum[k]);
+      else if (b.matte === 'light') matte[k] = smoothstep(0.02, 0.12, lum[k] - bgLum);
+      else matte[k] = 1;
+    }
   }
-  const r1 = Math.max(1, Math.round(Math.min(bw, bh) / 150));
+  const r1 = Math.max(1, Math.round((Math.min(bw, bh) / 150) * clamp(b.soft ?? 1, 0.5, 4)));
   matte = boxBlur(boxBlur(matte, bw, bh, r1), bw, bh, r1);
-  const r2 = Math.max(2, Math.round(Math.min(bw, bh) / 40));
+  const r2 = Math.max(2, Math.round(Math.min(bw, bh) / 40), r1 * 2);
   const spread = boxBlur(boxBlur(matte, bw, bh, r2), bw, bh, r2);
   const hole = new Float32Array(n);
   for (let k = 0; k < n; k++) hole[k] = Math.max(matte[k], Math.min(1, spread[k] * 4));
@@ -702,7 +729,7 @@ export function cutElements(source, elements) {
     const by = clamp(Math.floor(el.y * H - hy * m), 0, H - 2);
     const bx1 = clamp(Math.ceil(el.x * W + hx * m), bx + 2, W);
     const by1 = clamp(Math.ceil(el.y * H + hy * m), by + 2, H);
-    return { bx, by, bw: bx1 - bx, bh: by1 - by, cx: el.x * W, cy: el.y * H, rx, ry, angle, matte: el.matte, shape: el.shape };
+    return { bx, by, bw: bx1 - bx, bh: by1 - by, cx: el.x * W, cy: el.y * H, rx, ry, angle, matte: el.matte, shape: el.shape, soft: el.soft };
   });
   const originals = boxes.map((b) => ctx.getImageData(b.bx, b.by, b.bw, b.bh));
   const pieces = boxes.map((b, i) => {
@@ -769,6 +796,31 @@ export function elementState(el, time, progress, motion = 1) {
       pivot: [0, 0],
     };
   }
+  if (el.type === 'fly') {
+    // A gull sets off from where it is painted and flies along (dx, dy),
+    // easing into its stride, rising and falling a little with each few
+    // wingbeats, banking gently and growing smaller as it goes. It fades
+    // out over the far end of its flight; after a pause the next one fades
+    // in where the painter put it.
+    const period = Math.max(4, el.period);
+    const t = Math.max(0, time - (el.delay ?? 0));
+    const cyc = t / period + (el.phase || 0);
+    const u = cyc - Math.floor(cyc);
+    const FLY = 0.82;
+    const run = clamp(u / FLY, 0, 1);
+    const p = run * (0.3 + 0.7 * run) * amt;
+    const fadeIn = cyc < 1 ? 1 : smoothstep(0, 0.06, u);
+    const fadeOut = 1 - smoothstep(0.72, 1, run);
+    const bob = Math.sin(time * 1.9) * (el.bob ?? 0) * amt + Math.sin(time * 0.7 + 1) * (el.bob ?? 0) * 0.6 * amt;
+    return {
+      offset: [el.dx * p, el.dy * p + bob],
+      scale: Math.max(0.4, 1 - 0.3 * p),
+      rot: Math.sin(time * 0.8) * 0.06 * amt,
+      alpha: fadeIn * fadeOut * (u < FLY ? 1 : 0),
+      blur: [0, 0],
+      pivot: [0, 0],
+    };
+  }
   const w = (Math.PI * 2) / Math.max(1, el.period);
   if (el.type === 'pulse') {
     return {
@@ -780,7 +832,7 @@ export function elementState(el, time, progress, motion = 1) {
       pivot: [0, 0],
     };
   }
-  const travel = el.type === 'rise' ? progress : progress - 0.5;
+  const travel = progress - (el.anchor ?? (el.type === 'rise' ? 0 : 0.5));
   // A boat on a real sea: the main swell with a shorter cross sea over it,
   // so the pitching and heaving never repeat exactly.
   const heave = (Math.sin(time * w) + 0.3 * Math.sin(time * w * 1.73 + 2.1)) / 1.3;

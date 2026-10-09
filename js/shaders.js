@@ -180,15 +180,24 @@ vec4 elementColor(sampler2D layer, vec4 src, vec4 ref, vec4 xf, vec4 blur, vec4 
   float layerTexel = src.z / ref.w;
   float lod = log2(max(screenTexel / layerTexel, 1.0));
   // Flags and pennants: strongly red paint in the upper part of a ship
-  // ripples in waves running out along it, as cloth does in the wind;
-  // masts, sails and hull stay still.
+  // (above the height fx.w when it is set, else above its centre) ripples
+  // in waves running out along it, as cloth does in the wind; masts, sails
+  // and hull stay still.
   if (fx.x > 0.0) {
     vec4 c0 = textureLod(layer, clamp((q - src.xy) / src.zw, 0.0, 1.0), lod + 1.5);
     float red = smoothstep(0.06, 0.2, c0.r - max(c0.g, c0.b)) * smoothstep(0.25, 0.45, c0.r) * c0.a;
-    float upper = 1.0 - smoothstep(ref.y - 0.03, ref.y + 0.02, q.y);
+    float line = fx.w > 0.0 ? fx.w : ref.y;
+    float upper = 1.0 - smoothstep(line - 0.03, line + 0.02, q.y);
     float wv = sin(q.x * 190.0 - uTime * 7.5) * 0.6 + sin(q.x * 103.0 + q.y * 40.0 - uTime * 4.6) * 0.4;
     q.y += wv * fx.x * 0.0045 * red * upper;
     q.x += cos(q.x * 150.0 - uTime * 6.0) * fx.x * 0.0015 * red * upper;
+  }
+  // A bird's wingbeat: the paint toward the tips of the cut-out swings up
+  // and down about the body, in bursts of beats with glides between.
+  if (fx.y > 0.0) {
+    float span = (q.x - ref.x) / max(src.z * 0.35, 1e-4);
+    float beat = sin(uTime * 16.0) * smoothstep(-0.4, 0.3, sin(uTime * 0.9 + ref.x * 20.0));
+    q.y += beat * fx.y * src.w * 0.12 * span * span;
   }
   vec4 acc = vec4(0.0);
   for (int k = -2; k <= 2; k++) {
@@ -198,7 +207,15 @@ vec4 elementColor(sampler2D layer, vec4 src, vec4 ref, vec4 xf, vec4 blur, vec4 
     acc += vec4(t.rgb * t.a, t.a);
   }
   acc *= 0.2;
-  return vec4(acc.rgb / max(acc.a, 1e-4), acc.a * ref.z);
+  // An object cut off by the edge of the canvas (a ship half out of the
+  // painting): as it moves away from that edge, its cut end fades into the
+  // haze instead of showing a straight line.
+  float edge = 1.0;
+  if (fx.z > 0.0) {
+    vec2 fw = min(abs(xf.xy) * 0.6, vec2(0.05)) + 1e-4;
+    edge = smoothstep(0.0, fw.x, q.x) * smoothstep(0.0, fw.x, 1.0 - q.x) * smoothstep(0.0, fw.y, q.y) * smoothstep(0.0, fw.y, 1.0 - q.y);
+  }
+  return vec4(acc.rgb / max(acc.a, 1e-4), acc.a * ref.z * edge);
 }
 
 // Foam: soft, billowing white water that churns over time.
@@ -379,7 +396,11 @@ void main() {
     pr.x += cos(ph) * uWater * 0.003 * near / uAspect;
     float crest = smoothstep(0.55 - 0.15 * uSea, 1.0, swell);
     shade = 1.0 + (swell * 0.08 + crest * 0.16) * uWater * min(near, 1.0);
-    caps = crest * crest * fluff(vec2(pW.x * uAspect, z * 0.6), t) * uCaps * min(near * 1.4, 1.0);
+    // Whitecaps break in patches along the crests, sized on the water plane
+    // so they shrink into the distance, and stay muted on dark water.
+    float patches = smoothstep(0.45, 0.8, vnoise(W * vec2(1.2, 2.0) + vec2(t * 0.06, -t * 0.1)));
+    float lit = 0.35 + 0.65 * smoothstep(0.12, 0.5, luma(textureLod(uPaint, pW, 3.0).rgb));
+    caps = crest * crest * fluff(W * vec2(0.5, 0.8), t) * patches * lit * uCaps * min(near * 1.4, 1.0);
     vec2 wp = vec2((pW.x - 0.5) * uAspect * z * 4.0, z * 3.0);
     vec2 rip = vec2(vnoise(wp * 1.7 + vec2(t * 0.25, -t * 0.6)),
                     vnoise(wp * 1.7 + vec2(7.1 - t * 0.2, 3.3 - t * 0.5))) - 0.5;
@@ -426,13 +447,14 @@ void main() {
     if (i >= uFoamCount) break;
     vec4 f = uFoam[i];
     vec2 d = vec2((p.x - f.x) / f.z, (p.y - f.y) / (f.z * 0.2 * uAspect));
-    float wash = fluff(vec2(p.x * uAspect, p.y) * 2.2, t * 1.4);
+    // Churning clumps sized to the boat, a handful across its foam.
+    float wash = fluff(d * vec2(0.6, 0.3) + f.xy * 7.0, t * 1.4);
     // A broken band along the hull, frayed by the foam itself, thicker
     // where it spreads toward the viewer than above the waterline.
-    float r = length(vec2(d.x, d.y > 0.0 ? d.y * 0.45 : d.y * 2.4)) + (wash - 0.5) * 0.35;
+    float r = length(vec2(d.x, d.y > 0.0 ? d.y * 0.8 : d.y * 2.4)) + (wash - 0.5) * 0.45;
     float m = (1.0 - smoothstep(0.5, 1.0, r)) * f.w;
-    vec3 fc = mix(vec3(0.97, 0.95, 0.9), textureLod(uPaint, p, 5.0).rgb * 1.5, 0.25);
-    col = mix(col, fc, clamp(m * (0.15 + 0.85 * wash), 0.0, 0.85));
+    vec3 fc = mix(vec3(0.97, 0.95, 0.9), textureLod(uPaint, p, 5.0).rgb * 1.5, 0.25) * (0.82 + 0.18 * wash);
+    col = mix(col, fc, clamp(m * smoothstep(0.0, 0.8, wash), 0.0, 0.88));
   }
 
   vec2 q = toIso(p);

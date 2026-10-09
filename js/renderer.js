@@ -316,7 +316,7 @@ export class Renderer {
       ref.set([e.x, e.y, e.alpha, layers[i].width], i * 4);
       xf.set([e.offset[0], e.offset[1], Math.max(0.02, e.scale), e.rot], i * 4);
       blur.set([e.blur[0], e.blur[1], e.pivot?.[0] ?? 0, e.pivot?.[1] ?? 0], i * 4);
-      fx.set([e.flags ?? 0, 0, 0, 0], i * 4);
+      fx.set([e.flags ?? 0, e.flap ?? 0, e.edgeFade ?? 0, e.flagLine ?? 0], i * 4);
     }
     const foam = new Float32Array(12);
     const foamCount = Math.min(3, st.foam?.length ?? 0);

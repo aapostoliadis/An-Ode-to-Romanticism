@@ -38,7 +38,7 @@ const TRANSITION_SECONDS = { brush: 3.4, bleed: 3.8, light: 3.6, flow: 3.4, dark
 const REVEAL_SECONDS = 8;
 // Bumped when the shape of a score changes, so old saved edits do not hide
 // new defaults (v5: rough seas, foam, flags, sunbeams).
-const STORAGE_PREFIX = 'turner-lumieres:recipe:v5:';
+const STORAGE_PREFIX = 'turner-lumieres:recipe:v6:';
 
 let renderer;
 try {
@@ -149,7 +149,7 @@ function storageKey(prepared) {
 function baseRecipe(prepared) {
   const authored = prepared.entry.recipe ?? autoRecipe(prepared.analysis);
   const r = resolveRecipe({ ...DEFAULT_RECIPE, ...authored }, prepared.analysis);
-  r.elements = resolveElements(r, prepared.analysis);
+  r.elements = resolveElements(r, prepared.analysis, { study: prepared.isStudy });
   return r;
 }
 
@@ -582,7 +582,14 @@ function animateElements(r, motion) {
   const elements = r.elements.map((el) => {
     const st = elementState(el, state.elemTime, progress, motion);
     // Foam at the waterline (about the rocking pivot) and in front of it.
-    if (el.foam > 0) foam.push([el.x + st.offset[0], el.y + st.offset[1] + el.ry * 0.7, el.rx * 1.3, el.foam * st.alpha]);
+    if (el.foam > 0) {
+      foam.push([
+        el.x + st.offset[0] + (el.foamX ?? 0) * el.rx,
+        el.y + st.offset[1] + (el.foamAt ?? 0.7) * el.ry,
+        (el.foamW ?? 1.3) * el.rx,
+        el.foam * st.alpha,
+      ]);
+    }
     const cx = el.x + st.offset[0];
     const cy = el.y + st.offset[1];
     if (el.smoke && !smokeTaken) {
@@ -596,7 +603,15 @@ function animateElements(r, motion) {
       live.sunX = r.sunX + st.offset[0];
       live.sunY = r.sunY + st.offset[1];
     }
-    return { x: el.x, y: el.y, flags: el.flags ?? 0, ...st };
+    return {
+      x: el.x,
+      y: el.y,
+      flags: el.flags ?? 0,
+      flagLine: el.flagLine ?? 0,
+      flap: el.type === 'fly' ? el.flap ?? 0.6 : 0,
+      edgeFade: el.type === 'approach' || el.type === 'fly' ? 0 : 1,
+      ...st,
+    };
   });
   return { recipe: live, elements, smokeScale, foam };
 }

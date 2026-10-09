@@ -131,20 +131,78 @@ export const PAINTINGS = [
       glow: 0.85,
       rays: 0.95,
       sunColor: '#ffd88a',
+      // The sun is just above the sea on the right; the bright clouds at the
+      // top left would otherwise be taken for it.
+      sunX: 0.78,
+      sunY: 0.63,
       water: 0.9,
       sea: 0.85,
-      foam: 0.5,
+      foam: 0.3,
       mist: 0.3,
       grade: 0.25,
       zoom: 1.15,
       transition: 'light',
       mood: 'myth',
       sounds: 'sea',
-      // The sun climbs out of the sea; the galleon pitches on the swell with
-      // white water at its bow, drifts slowly to the left, pennants flying.
+      // The sun climbs out of the sea. The galleon, traced whole with its
+      // oars, rocks about its waterline with white water at its bow and its
+      // red flags flying. The ship on the right sets off from where it is
+      // painted and slides slowly to the left, the way its prow points; its
+      // stern, cut off by the edge of the canvas, fades into the haze.
       elements: [
-        { type: 'rise', x: 'sun', y: 'sun', rx: 0.07, ry: 0.09, matte: 'light', dy: -0.08, light: true },
-        { type: 'rock', x: 0.41, y: 0.48, rx: 0.15, ry: 0.22, bob: 0.006, rock: 0.03, dx: -0.05, period: 7, pivot: 0.75, foam: 1, flags: 1 },
+        { type: 'rise', x: 'sun', y: 'sun', rx: 0.05, ry: 0.06, matte: 'light', dy: -0.05, light: true },
+        {
+          type: 'rock',
+          x: 0.3802, y: 0.5583, rx: 0.1542, ry: 0.34,
+          onStudy: false,
+          soft: 2,
+          bob: 0.004,
+          rock: 0.012,
+          dx: 0.015,
+          anchor: 0,
+          period: 7,
+          pivot: 0.82,
+          foam: 0.9,
+          foamAt: 0.84,
+          foamX: 0.55,
+          foamW: 0.5,
+          flags: 1.2,
+          flagLine: 0.62,
+          shape: [
+            [0.155, -1.0], [0.223, -1.0], [0.304, -0.966], [0.466, -0.912], [0.551, -0.755], [0.48, -0.672],
+            [0.358, -0.657], [0.345, -0.539], [0.459, -0.422], [0.561, -0.373], [0.581, -0.172], [0.946, -0.593],
+            [1.0, -0.574], [0.635, -0.044], [0.723, 0.201], [0.757, 0.355], [0.689, 0.377], [0.608, 0.422],
+            [0.649, 0.525], [0.649, 0.716], [0.601, 0.804], [0.422, 0.838], [-0.166, 0.848], [-0.459, 0.828],
+            [-0.52, 0.877], [-0.865, 1.0], [-1.0, 0.985], [-0.993, 0.863], [-0.757, 0.745], [-0.696, 0.686],
+            [-0.723, 0.441], [-0.73, -0.289], [-0.666, -0.333], [-0.615, -0.353], [-0.439, -0.061], [-0.412, -0.083],
+            [-0.196, -0.078], [-0.155, 0.074], [-0.142, -0.417], [-0.047, -0.426], [-0.027, -0.49], [-0.014, -0.588],
+            [0.068, -0.799], [0.142, -0.949],
+          ],
+        },
+        {
+          type: 'drift',
+          x: 0.9156, y: 0.695, rx: 0.0865, ry: 0.2567,
+          onStudy: false,
+          soft: 2,
+          dx: -0.06,
+          dy: 0,
+          anchor: 0,
+          bob: 0.003,
+          rock: 0.008,
+          period: 9,
+          pivot: 0.75,
+          shape: [
+            [-0.018, -1.0], [0.078, -1.0], [0.114, -0.808], [0.151, -0.63], [0.169, -0.565], [0.235, -0.614],
+            [0.349, -0.753], [0.458, -0.805], [0.542, -0.847], [0.645, -0.795], [0.753, -0.711], [0.849, -0.604],
+            [0.916, -0.468], [0.958, -0.321], [1.0, -0.256], [1.0, 1.0], [0.675, 0.994], [0.313, 0.974],
+            [-0.048, 0.948], [-0.38, 0.906], [-0.663, 0.847], [-0.867, 0.773], [-0.97, 0.669], [-1.0, 0.506],
+            [-1.0, 0.312], [-0.988, 0.149], [-0.904, 0.091], [-0.783, 0.039], [-0.669, -0.003], [-0.572, 0.006],
+            [-0.476, 0.052], [-0.518, 0.104], [-0.639, 0.104], [-0.687, 0.136], [-0.651, 0.192], [-0.518, 0.208],
+            [-0.41, 0.188], [-0.398, 0.052], [-0.434, -0.162], [-0.349, -0.24], [-0.217, -0.279], [-0.084, -0.344],
+            [-0.054, -0.429], [-0.108, -0.679], [-0.036, -0.695], [0.012, -0.513], [0.072, -0.552], [0.054, -0.727],
+            [0.018, -0.89],
+          ],
+        },
       ],
     },
     study: {
@@ -303,9 +361,48 @@ export const PAINTINGS = [
       transition: 'flow',
       mood: 'tragic',
       sounds: 'tempest',
-      // The ship pitches in the swell.
+      // The ship pitches in the swell, its masts and rigging cut from the
+      // sky by their darker paint, foam breaking at its bow. The pale gull
+      // over the water to the right of the sun flies off to the left.
       elements: [
-        { type: 'rock', x: 0.22, y: 0.4, rx: 0.11, ry: 0.13, snap: 'dark', snapRadius: 0.1, bob: 0.012, rock: 0.065, period: 4.2, foam: 1 },
+        {
+          type: 'rock',
+          x: 0.31, y: 0.491, rx: 0.12, ry: 0.1082,
+          matte: 'dark',
+          onStudy: false,
+          bob: 0.01,
+          rock: 0.05,
+          period: 4.2,
+          pivot: 0.85,
+          foam: 1,
+          foamAt: 0.85,
+          foamX: -0.3,
+          foamW: 0.9,
+          shape: [
+            [-1.0, 0.262], [-0.75, 0.138], [-0.417, -0.292], [-0.25, -0.477], [-0.146, -0.938], [-0.033, -0.938],
+            [-0.083, -0.477], [0.083, -0.292], [0.333, -0.6], [0.5, -1.0], [0.604, -0.982], [0.479, -0.538],
+            [0.708, -0.662], [0.75, -0.569], [0.5, -0.108], [0.417, 0.138], [0.75, 0.138], [1.0, 0.2],
+            [0.958, 0.385], [0.75, 0.631], [0.667, 0.877], [0.333, 0.969], [-0.083, 1.0], [-0.5, 0.969],
+            [-0.792, 0.877], [-0.958, 0.569],
+          ],
+        },
+        {
+          type: 'fly',
+          x: 0.7, y: 0.7154, rx: 0.012, ry: 0.017,
+          onStudy: false,
+          soft: 2,
+          dx: -0.28,
+          dy: -0.045,
+          bob: 0.004,
+          period: 15,
+          delay: 2,
+          flap: 1.2,
+          shape: [
+            [-1.0, 0.137], [-0.583, -0.098], [-0.167, -0.333], [0.083, -0.882], [0.417, -1.0], [0.5, -0.647],
+            [0.25, -0.176], [0.667, -0.098], [1.0, 0.137], [0.917, 0.529], [0.417, 0.765], [-0.083, 1.0],
+            [-0.5, 0.765], [-0.917, 0.529],
+          ],
+        },
       ],
     },
     study: {
@@ -463,6 +560,31 @@ export const PAINTINGS = [
       transition: 'light',
       mood: 'fire',
       sounds: 'fire',
+      // The crowded barges on the Thames row slowly toward the fire, the way
+      // their bows point: left and a little upstream.
+      elements: [
+        {
+          type: 'drift',
+          x: 0.3367, y: 0.7549, rx: 0.1293, ry: 0.0604,
+          onStudy: false,
+          soft: 3,
+          foam: 0,
+          dx: -0.04,
+          dy: -0.008,
+          anchor: 0,
+          bob: 0.002,
+          rock: 0.006,
+          period: 6,
+          pivot: 0.5,
+          shape: [
+            [-0.988, -0.544], [-0.903, -0.733], [-0.826, -0.756], [-0.749, -0.644], [-0.671, -0.933], [-0.536, -1.0],
+            [-0.439, -0.878], [-0.323, -0.822], [-0.188, -0.767], [-0.052, -0.6], [0.103, -0.433], [0.257, -0.322],
+            [0.412, -0.211], [0.567, -0.178], [0.76, -0.156], [0.896, -0.1], [0.992, 0.067], [1.0, 0.289],
+            [0.915, 0.511], [0.799, 0.756], [0.683, 0.922], [0.489, 1.0], [0.219, 0.922], [-0.052, 0.711],
+            [-0.284, 0.456], [-0.369, 0.289], [-0.516, 0.144], [-0.787, 0.0], [-0.942, -0.089], [-1.0, -0.289],
+          ],
+        },
+      ],
     },
     study: {
       sky: [[0, '#141826'], [0.3, '#3a2c3a'], [0.5, '#c06a2a'], [0.62, '#f2b04a'], [1, '#1e1812']],
