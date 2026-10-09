@@ -7,10 +7,10 @@
 //     canvas, and for the water from the band just below the horizon
 //   - every pixel is scored against those models; what neither explains is
 //     land (cliffs, banks, bridges, buildings, foliage)
-//   - water also has to sit below the horizon and is favoured where the
+//   - water has to sit below the horizon and is favoured where the
 //     strokes run horizontally, as Turner paints reflections
 //   - land above the horizon has to be connected to the ground, so a dark
-//     storm cloud stays in the sky while a castle on its hill does not
+//     storm cloud stays in the sky and a castle on its hill does not
 //   - each layer gets a "fill": the layer continued behind the others, so
 //     when the layers slide apart in parallax there is paint behind them
 // Figures are the cut-out moving elements (elements.js). The brush texture
