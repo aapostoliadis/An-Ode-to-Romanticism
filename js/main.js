@@ -740,15 +740,18 @@ function updateSoundBtn() {
   soundBtn.setAttribute('aria-pressed', String(soundWanted));
 }
 
+let soundStarting = false;
 async function startSound() {
+  soundStarting = true;
   try {
     await ambient.start();
     if (state.current) ambient.setMood(state.current.recipe.mood);
-    if (!ambient.trackFailed && ambient.music?.src.includes(BACKGROUND_TRACK.url)) status(`Music: ${BACKGROUND_TRACK.title}`, 4000);
+    if (!ambient.trackFailed && !ambient.customMusic) status(`Music: ${BACKGROUND_TRACK.title}`, 4000);
   } catch (err) {
     console.warn(err);
     status('Audio could not start in this browser.');
   }
+  soundStarting = false;
   updateSoundBtn();
 }
 
@@ -787,12 +790,19 @@ soundBtn.addEventListener('click', toggleSound);
 function initSound() {
   updateSoundBtn();
   if (!soundWanted) return;
-  ambient.setup();
+  ambient.prepareMusic();
   if (ambient.ctx.state === 'running') {
     startSound();
   } else {
     armUnlock();
     status('Click anywhere or press a key to start the music.', 7000);
+    // Some browsers allow sound a moment after the page opens: start then.
+    ambient.ctx.resume().then(() => {
+      if (soundWanted && !ambient.on && !soundStarting) {
+        disarmUnlock();
+        startSound();
+      }
+    });
   }
 }
 

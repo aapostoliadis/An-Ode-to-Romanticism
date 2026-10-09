@@ -73,6 +73,38 @@ const EVERY = {
 
 export const BACKGROUND_TRACK = { url: 'audio/suspended-by-light.mp3', title: 'Suspended by Light' };
 
+// Where a pass of the music starts and ends: past the track's own fade-in
+// and before its fade-out, where it plays at full voice, so one pass can
+// crossfade into the next without a dip. Measured in windows of 0.1 s.
+function loopPoints(buffer) {
+  const win = Math.round(buffer.sampleRate * 0.1);
+  const n = Math.floor(buffer.length / win);
+  const chans = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c));
+  const rms = new Float32Array(n);
+  for (let w = 0; w < n; w++) {
+    let s = 0;
+    for (const d of chans) for (let i = w * win; i < (w + 1) * win; i += 4) s += d[i] * d[i];
+    rms[w] = Math.sqrt(s / Math.ceil(win / 4) / chans.length);
+  }
+  // Full voice: within 6 dB of the track's median level.
+  const body = Float32Array.from(rms).sort()[n >> 1] * 0.5;
+  let a = 0;
+  while (a < n && rms[a] < body) a++;
+  let b = n - 1;
+  while (b > a && rms[b] < body) b--;
+  let loopStart = Math.min(a * 0.1, 12);
+  let loopEnd = Math.max((b + 1) * 0.1, buffer.duration - 12);
+  if (loopEnd - loopStart < 20) {
+    loopStart = 0;
+    loopEnd = buffer.duration;
+  }
+  return { loopStart, loopEnd, fade: Math.min(4, (loopEnd - loopStart) / 5) };
+}
+
+// Equal-power fade curves for the crossfade between passes.
+const FADE_IN = Float32Array.from({ length: 64 }, (_, i) => Math.sin(((i / 63) * Math.PI) / 2));
+const FADE_OUT = Float32Array.from({ length: 64 }, (_, i) => Math.cos(((i / 63) * Math.PI) / 2));
+
 const midiHz = (m) => 440 * 2 ** ((m - 69) / 12);
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -94,6 +126,8 @@ export class Ambient {
     this.mood = MOODS.warm;
     this.level = 0;
     this.music = null;
+    this.musicVoices = [];
+    this.musicNext = 0;
   }
 
   setup() {
@@ -242,7 +276,8 @@ export class Ambient {
 
   async start() {
     this.setup();
-    if (!this.music && !this.trackFailed) this.loadTrack();
+    clearTimeout(this.suspendTimer);
+    this.prepareMusic();
     await this.ctx.resume();
     this.on = true;
     this.master.gain.setTargetAtTime(0.75, this.ctx.currentTime, 1.2);
@@ -251,7 +286,7 @@ export class Ambient {
     this.next = {};
     clearInterval(this.timer);
     this.timer = setInterval(() => this.tick(), 200);
-    if (this.music) this.music.play().catch(() => {});
+    if (this.music && !this.musicVoices.length) this.playMusic(this.ctx.currentTime + 0.05);
   }
 
   stop() {
@@ -259,7 +294,12 @@ export class Ambient {
     this.on = false;
     this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.6);
     clearInterval(this.timer);
-    if (this.music) this.music.pause();
+    // Once faded out the whole context rests, so the music picks up where
+    // it left off when the sound comes back.
+    clearTimeout(this.suspendTimer);
+    this.suspendTimer = setTimeout(() => {
+      if (!this.on) this.ctx.suspend();
+    }, 2500);
   }
 
   setMood(name) {
@@ -285,7 +325,7 @@ export class Ambient {
     f.type = type;
     f.frequency.setTargetAtTime(hz, now, 1);
     f.Q.value = q;
-    const amt = this.music ? 0 : mood.noiseAmt;
+    const amt = this.music || this.musicLoading ? 0 : mood.noiseAmt;
     this.noiseGain.gain.setTargetAtTime(amt, now, 1.5);
     this.lfoGain.gain.setTargetAtTime(amt * 0.8, now, 1.5);
   }
@@ -294,7 +334,11 @@ export class Ambient {
     if (!this.on) return;
     const now = this.ctx.currentTime;
     this.tickFx(now);
-    if (this.music) return;
+    // The next pass of the music is queued well ahead of its start.
+    if (this.music && this.musicVoices.length && now > this.musicNext - 60) {
+      this.schedulePass(Math.max(this.musicNext, now + 0.05), this.music.loopStart, true);
+    }
+    if (this.music || this.musicLoading) return;
     const { mood } = this;
     if (now >= this.nextChord - 0.05) {
       const chord = mood.chords[this.chordIndex % mood.chords.length];
@@ -908,47 +952,103 @@ export class Ambient {
     this.burst(at, len, 'highpass', 2600, 0.09, { attack: 0.05, out: this.trainBus });
   }
 
-  // Plays an audio element as the music, in place of the generated score.
-  setMusic(el) {
-    if (this.music) {
-      this.music.pause();
-      if (this.music.src.startsWith('blob:')) URL.revokeObjectURL(this.music.src);
-    }
-    el.loop = true;
-    this.music = el;
-    this.ctx.createMediaElementSource(el).connect(this.musicBus);
-    this.applyMood();
+  // ---- The music
+  //
+  // The track is decoded into memory and played through Web Audio, so it
+  // loops without a seam in any browser: the first pass plays from the very
+  // beginning, and each pass after it skips the track's own fade-in and
+  // fade-out, the end of one crossfading into the start of the next.
+
+  // Loads the show's own track, early, so it is ready by the first click.
+  prepareMusic() {
+    this.setup();
+    if (this.music || this.musicLoading || this.trackFailed) return;
+    this.loadMusic(BACKGROUND_TRACK.url, BACKGROUND_TRACK.title).catch((err) => {
+      console.warn(err);
+      // Without the track the generated score plays instead.
+      this.trackFailed = true;
+      if (this.on) {
+        this.applyMood();
+        this.nextChord = this.ctx.currentTime + 0.1;
+      }
+    });
   }
 
-  // The show's own track. Should it fail to load, the generated score
-  // takes over.
-  loadTrack() {
-    const el = new Audio(BACKGROUND_TRACK.url);
-    el.preload = 'auto';
-    el.addEventListener(
-      'error',
-      () => {
-        if (this.music !== el) return;
-        this.trackFailed = true;
-        this.music = null;
-        if (this.on) {
-          this.applyMood();
-          this.nextChord = this.ctx.currentTime + 0.1;
-        }
-      },
-      { once: true },
-    );
-    this.setMusic(el);
+  // Decodes a track (an address or a file) and makes it the music. A later
+  // call wins over one still loading.
+  async loadMusic(source, title) {
+    const token = (this.musicToken = (this.musicToken ?? 0) + 1);
+    this.musicLoading = true;
+    try {
+      const data =
+        typeof source === 'string'
+          ? await fetch(source).then((r) => {
+              if (!r.ok) throw new Error(`Music request failed: ${r.status}`);
+              return r.arrayBuffer();
+            })
+          : await source.arrayBuffer();
+      const buffer = await this.ctx.decodeAudioData(data);
+      if (token !== this.musicToken) return;
+      this.stopMusic();
+      this.music = { title, buffer, ...loopPoints(buffer) };
+      this.musicLoading = false;
+      this.applyMood();
+      if (this.on) this.playMusic(this.ctx.currentTime + 0.05);
+    } catch (err) {
+      if (token === this.musicToken) {
+        this.musicLoading = false;
+        if (this.on) this.applyMood();
+      }
+      throw err;
+    }
+  }
+
+  playMusic(when) {
+    this.stopMusic();
+    this.schedulePass(when, 0, false);
+  }
+
+  // One pass of the music from `offset` to the loop end, fading out into
+  // the next pass (and fading in, after the first).
+  schedulePass(when, offset, fadeIn) {
+    const { ctx } = this;
+    const { buffer, loopEnd, fade } = this.music;
+    const len = loopEnd - offset;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const g = ctx.createGain();
+    if (fadeIn) g.gain.setValueCurveAtTime(FADE_IN, when, fade);
+    g.gain.setValueCurveAtTime(FADE_OUT, when + len - fade, fade);
+    src.connect(g);
+    g.connect(this.musicBus);
+    src.start(when, offset, len);
+    const voice = { src, g };
+    src.onended = () => {
+      g.disconnect();
+      this.musicVoices = this.musicVoices.filter((v) => v !== voice);
+    };
+    this.musicVoices.push(voice);
+    this.musicNext = when + len - fade;
+  }
+
+  stopMusic() {
+    for (const { src, g } of this.musicVoices) {
+      src.onended = null;
+      try {
+        src.stop();
+      } catch {
+        // Not started yet.
+      }
+      g.disconnect();
+    }
+    this.musicVoices = [];
   }
 
   // A track the visitor loads replaces the background music.
   async useMusic(file) {
-    this.setup();
-    const el = new Audio();
-    el.src = URL.createObjectURL(file);
-    this.setMusic(el);
     await this.start();
-    await el.play();
+    await this.loadMusic(file, file.name);
+    this.customMusic = true;
   }
 
   // Smoothed low-band energy, 0..1, used to make the light breathe.
