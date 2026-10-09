@@ -1,5 +1,17 @@
 import { analysePainting, autoRecipe, resolveRecipe } from './analysis.js';
 import { Ambient } from './audio.js';
+import {
+  ELEMENT_TYPES,
+  MAX_ELEMENTS,
+  cutElements,
+  elementState,
+  elementsKey,
+  estimateVanishing,
+  makeElement,
+  resolveElements,
+  retypeElement,
+  sanitizeElements,
+} from './elements.js';
 import { fitSource, loadFirst, loadImage, paintStudy } from './loader.js';
 import {
   CHAPTERS,
@@ -11,7 +23,7 @@ import {
 } from './paintings.js';
 import { Recorder } from './recorder.js';
 import { Renderer } from './renderer.js';
-import { Handles, buildEditor, buildGallery } from './ui.js';
+import { Handles, buildEditor, buildElementsEditor, buildGallery } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('stage');
@@ -113,7 +125,11 @@ function prepare(entry) {
         isStudy = true;
       }
     }
-    return { entry, source, analysis: analysePainting(source), isStudy };
+    const prepared = { entry, source, analysis: analysePainting(source), isStudy };
+    // Cut the moving elements now, ahead of the transition, so the switch
+    // itself does not stall.
+    cutFor(source, buildRecipe(prepared).elements);
+    return prepared;
   })();
   state.prepared.set(entry.id, job);
   job.catch(() => state.prepared.delete(entry.id));
@@ -126,18 +142,31 @@ function storageKey(prepared) {
 
 function baseRecipe(prepared) {
   const authored = prepared.entry.recipe ?? autoRecipe(prepared.analysis);
-  return resolveRecipe({ ...DEFAULT_RECIPE, ...authored }, prepared.analysis);
+  const r = resolveRecipe({ ...DEFAULT_RECIPE, ...authored }, prepared.analysis);
+  r.elements = resolveElements(r, prepared.analysis);
+  return r;
 }
 
 function buildRecipe(prepared) {
   const base = baseRecipe(prepared);
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey(prepared)) ?? 'null');
-    if (saved && typeof saved === 'object') return { ...base, ...pickKnown(saved) };
+    if (saved && typeof saved === 'object') return completeElements({ ...base, ...pickKnown(saved) }, prepared.analysis);
   } catch {
     // Storage can be unavailable (private mode); the defaults still work.
   }
   return base;
+}
+
+// Scores loaded from storage or a file may leave an approach without its
+// vanishing point; estimate it from the painting.
+function completeElements(recipe, analysis) {
+  for (const el of recipe.elements) {
+    if (el.type === 'approach' && (typeof el.vx !== 'number' || typeof el.vy !== 'number')) {
+      Object.assign(el, estimateVanishing(analysis, el));
+    }
+  }
+  return recipe;
 }
 
 // Only accept known keys with the right type, so a stale or hand-edited
@@ -146,6 +175,11 @@ function pickKnown(obj) {
   const out = {};
   for (const [key, def] of Object.entries(DEFAULT_RECIPE)) {
     const v = obj?.[key];
+    if (Array.isArray(def)) {
+      const list = sanitizeElements(v);
+      if (list) out[key] = list;
+      continue;
+    }
     const numeric = typeof def === 'number' || def === 'auto' || def === 'sun';
     if (numeric ? typeof v === 'number' && Number.isFinite(v) : typeof v === 'string') out[key] = v;
   }
@@ -203,8 +237,10 @@ function applyPainting(index, prepared) {
   const first = !state.current;
   const prevChapter = state.current?.entry.chapter;
   if (!first) renderer.capturePrev();
-  renderer.setPainting(prepared.source, prepared.analysis);
   const recipe = buildRecipe(prepared);
+  const cut = cutFor(prepared.source, recipe.elements);
+  renderer.setPainting(cut ? cut.plate : prepared.source, prepared.analysis);
+  renderer.setLayers(cut ? cut.pieces : []);
   state.current = { ...prepared, recipe };
   state.index = index;
   state.paintTime = 0;
@@ -227,6 +263,30 @@ function applyPainting(index, prepared) {
   }
 }
 
+// Cutting elements out takes a few tens of milliseconds, so results are
+// kept per painting and per element layout.
+const cutCache = new WeakMap();
+function cutFor(source, elements) {
+  if (!elements.length) return null;
+  const key = elementsKey(elements);
+  const hit = cutCache.get(source);
+  if (hit?.key === key) return hit.cut;
+  const cut = cutElements(source, elements);
+  cutCache.set(source, { key, cut });
+  return cut;
+}
+
+let recutTimer = 0;
+function scheduleRecut() {
+  clearTimeout(recutTimer);
+  recutTimer = setTimeout(() => {
+    const { source, recipe } = state.current;
+    const cut = cutFor(source, recipe.elements);
+    renderer.setPlate(cut ? cut.plate : source);
+    renderer.setLayers(cut ? cut.pieces : []);
+  }, 120);
+}
+
 function next() {
   goTo(state.index + 1);
 }
@@ -237,11 +297,15 @@ function prev() {
 // ---------------------------------------------------------------------------
 // Camera: a slow push toward the focal point, then an easing pull back.
 
+// 0..1 through the painting's time on the wall; when the show is paused it
+// swings back and forth so camera and elements never jump.
+function showProgress(tau, dur) {
+  const u = state.playing ? tau / dur : 1 - Math.abs(1 - ((tau / dur) % 2));
+  return clamp(u, 0, 1);
+}
+
 function cameraAt(r, tau) {
-  const dur = r.duration;
-  let u = tau / dur;
-  if (!state.playing) u = 1 - Math.abs(1 - ((tau / dur) % 2));
-  u = clamp(u, 0, 1);
+  const u = showProgress(tau, r.duration);
   const push = reducedMotion ? 1 + (r.zoom - 1) * 0.3 : r.zoom;
   if (u < 0.72) {
     const k = ease(u / 0.72);
@@ -405,9 +469,11 @@ function frame(now) {
     if (state.mode === 'room' && performance.now() - state.lastLookInput > 5000) {
       state.look[0] = lerp(state.look[0], Math.sin(state.time * 0.045) * 0.9, 1 - Math.exp(-dt * 0.5));
     }
-    const recipe = motion < 1 ? { ...r, flow: r.flow * motion } : r;
+    const { recipe, elements, smokeScale } = animateElements(r, motion);
     renderer.render({
       recipe,
+      elements,
+      smokeScale,
       time: state.time,
       view: state.view,
       parallax,
@@ -433,6 +499,33 @@ function frame(now) {
     adaptQuality(dt);
   }
   requestAnimationFrame(frame);
+}
+
+// Per-frame element transforms. Smoke attached to an element rides with it,
+// and an element marked as the light carries the glow and rays along.
+function animateElements(r, motion) {
+  const progress = showProgress(state.paintTime, r.duration);
+  const live = { ...r, flow: r.flow * motion };
+  let smokeScale = 1;
+  let smokeTaken = false;
+  const elements = r.elements.map((el) => {
+    const st = elementState(el, state.time, progress, motion);
+    const cx = el.x + st.offset[0];
+    const cy = el.y + st.offset[1];
+    if (el.smoke && !smokeTaken) {
+      smokeTaken = true;
+      live.smokeX = cx + (r.smokeX - el.x) * st.scale;
+      live.smokeY = cy + (r.smokeY - el.y) * st.scale;
+      live.smoke = r.smoke * st.alpha;
+      smokeScale = st.scale;
+    }
+    if (el.light) {
+      live.sunX = r.sunX + st.offset[0];
+      live.sunY = r.sunY + st.offset[1];
+    }
+    return { x: el.x, y: el.y, ...st };
+  });
+  return { recipe: live, elements, smokeScale };
 }
 
 function tick(dt) {
@@ -642,19 +735,81 @@ const editor = buildEditor($('editorGroups'), (key, value) => {
   if (key === 'mood') ambient.setMood(value);
   saveRecipe();
 });
-const handles = new Handles($('handles'), (name, x, y) => {
-  const v = state.view;
-  const px = clamp(v[0] + (x / window.innerWidth) * v[2], 0, 1);
-  const py = clamp(v[1] + (y / window.innerHeight) * v[3], 0, 1);
-  const r = state.current.recipe;
-  const keys = { sun: ['sunX', 'sunY'], vortex: ['vortexX', 'vortexY'], focus: ['focusX', 'focusY'], smoke: ['smokeX', 'smokeY'] };
-  if (name === 'horizon') r.horizon = py;
-  else {
-    r[keys[name][0]] = px;
-    r[keys[name][1]] = py;
-  }
-  saveRecipe();
+const handles = new Handles(
+  $('handles'),
+  (name, x, y) => {
+    const v = state.view;
+    const px = clamp(v[0] + (x / window.innerWidth) * v[2], 0, 1);
+    const py = clamp(v[1] + (y / window.innerHeight) * v[3], 0, 1);
+    const r = state.current.recipe;
+    const [kind, index] = name.split('-');
+    const el = r.elements[Number(index)];
+    if (kind === 'element' && el) {
+      // Attached smoke keeps its place on the element.
+      if (el.smoke) {
+        r.smokeX += px - el.x;
+        r.smokeY += py - el.y;
+      }
+      el.x = px;
+      el.y = py;
+    } else if (kind === 'vanish' && el) {
+      el.vx = px;
+      el.vy = py;
+    } else if (name === 'horizon') {
+      r.horizon = py;
+    } else {
+      const keys = { sun: ['sunX', 'sunY'], vortex: ['vortexX', 'vortexY'], focus: ['focusX', 'focusY'], smoke: ['smokeX', 'smokeY'] };
+      r[keys[name][0]] = px;
+      r[keys[name][1]] = py;
+    }
+    saveRecipe();
+  },
+  (name) => {
+    if (name.startsWith('element-')) scheduleRecut();
+  },
+);
+
+const elementsEditor = buildElementsEditor($('elementsEditor'), {
+  onChange(i, key, value) {
+    const r = state.current.recipe;
+    const el = r.elements[i];
+    if (!el) return;
+    if (key === 'type') {
+      const next = retypeElement(el, value);
+      if (next.type === 'approach') Object.assign(next, estimateVanishing(state.current.analysis, next));
+      r.elements[i] = next;
+      renderElementsEditor();
+    } else if (key === 'size') {
+      const ratio = el.ry / el.rx;
+      el.rx = value;
+      el.ry = value * ratio;
+      scheduleRecut();
+    } else {
+      el[key] = value;
+    }
+    saveRecipe();
+  },
+  onAdd() {
+    const r = state.current.recipe;
+    if (r.elements.length >= MAX_ELEMENTS) return;
+    const aspect = state.current.analysis.aspect;
+    r.elements.push(makeElement({ type: 'drift', x: r.focusX, y: r.focusY, rx: 0.08, ry: 0.08 * aspect }));
+    renderElementsEditor();
+    scheduleRecut();
+    saveRecipe();
+    status('Drag the numbered marker onto the object you want to move, then choose how it moves.', 6000);
+  },
+  onRemove(i) {
+    state.current.recipe.elements.splice(i, 1);
+    renderElementsEditor();
+    scheduleRecut();
+    saveRecipe();
+  },
 });
+
+function renderElementsEditor() {
+  elementsEditor.render(state.current.recipe.elements, ELEMENT_TYPES, MAX_ELEMENTS);
+}
 
 function updateHandles() {
   const v = state.view;
@@ -668,6 +823,7 @@ function updateHandles() {
 function refreshEditor() {
   $('editorTitle').textContent = state.current.entry.title;
   editor.setValues(state.current.recipe);
+  renderElementsEditor();
 }
 
 function setEditing(v) {
@@ -690,6 +846,7 @@ $('resetRecipe').addEventListener('click', () => {
   }
   state.current.recipe = baseRecipe(state.current);
   refreshEditor();
+  scheduleRecut();
   status('Animation reset to its original score.');
 });
 $('reanalyse').addEventListener('click', () => {
@@ -716,7 +873,9 @@ $('importInput').addEventListener('change', async (e) => {
   try {
     const json = JSON.parse(await file.text());
     Object.assign(state.current.recipe, pickKnown(json.recipe ?? json));
+    completeElements(state.current.recipe, state.current.analysis);
     refreshEditor();
+    scheduleRecut();
     saveRecipe();
     ambient.setMood(state.current.recipe.mood);
     status(`Score applied to ${state.current.entry.title}.`);

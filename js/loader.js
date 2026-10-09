@@ -43,7 +43,8 @@ export function fitSource(source, maxDim) {
   const cv = document.createElement('canvas');
   cv.width = Math.max(1, Math.round(w * scale));
   cv.height = Math.max(1, Math.round(h * scale));
-  const cx = cv.getContext('2d');
+  // CPU-backed, since analysis and element cutting read the pixels back.
+  const cx = cv.getContext('2d', { willReadFrequently: true });
   cx.imageSmoothingQuality = 'high';
   cx.drawImage(source, 0, 0, cv.width, cv.height);
   return cv;
@@ -301,7 +302,7 @@ export function paintStudy(spec, width = 1600, seedKey = 'turner', options = {})
   const out = document.createElement('canvas');
   out.width = W;
   out.height = H;
-  const o = out.getContext('2d');
+  const o = out.getContext('2d', { willReadFrequently: true });
   o.drawImage(base, 0, 0);
   const px = b.getImageData(0, 0, W, H).data;
   const rand = rng(hashString(seedKey));

@@ -78,6 +78,9 @@ export const DEFAULT_RECIPE = {
   duration: 38,
   transition: 'brush',
   mood: 'warm',
+  // Cut-out elements that move (see elements.js). x/y may be 'sun'; snap
+  // moves the hint onto the darkest or brightest mass within snapRadius.
+  elements: [],
 };
 
 export const TRANSITIONS = [
@@ -120,6 +123,11 @@ export const PAINTINGS = [
       zoom: 1.4,
       transition: 'light',
       mood: 'myth',
+      // The sun climbs out of the sea; the galleon sways from its waterline.
+      elements: [
+        { type: 'rise', x: 'sun', y: 'sun', rx: 0.07, ry: 0.09, matte: 'light', dy: -0.05, light: true },
+        { type: 'rock', x: 0.41, y: 0.48, rx: 0.15, ry: 0.22, bob: 0.002, rock: 0.012, period: 9, pivot: 0.75 },
+      ],
     },
     study: {
       sky: [[0, '#34425a'], [0.28, '#a9855a'], [0.45, '#f2c66e'], [0.6, '#e0a347'], [1, '#5b3a22']],
@@ -158,6 +166,7 @@ export const PAINTINGS = [
       zoom: 1.3,
       transition: 'bleed',
       mood: 'dawn',
+      elements: [{ type: 'rise', x: 'sun', y: 'sun', rx: 0.07, ry: 0.09, matte: 'light', dy: -0.06, light: true }],
     },
     study: {
       sky: [[0, '#e3d7aa'], [0.35, '#f4e7b8'], [0.55, '#efe0a5'], [1, '#c4bb98']],
@@ -200,6 +209,23 @@ export const PAINTINGS = [
       zoom: 1.35,
       transition: 'brush',
       mood: 'warm',
+      // The tug chugs with its smoke; the sun sinks toward the horizon.
+      elements: [
+        {
+          type: 'rock',
+          x: 0.4,
+          y: 0.6,
+          rx: 0.06,
+          ry: 0.08,
+          snap: 'dark',
+          snapRadius: 0.1,
+          bob: 0.003,
+          rock: 0.015,
+          period: 3.5,
+          smoke: true,
+        },
+        { type: 'rise', x: 'sun', y: 'sun', rx: 0.05, ry: 0.07, matte: 'light', dy: 0.03, light: true },
+      ],
     },
     study: {
       sky: [[0, '#58778f'], [0.35, '#a9b7b5'], [0.5, '#e8c27c'], [0.64, '#f0a24a'], [1, '#6a3f22']],
@@ -245,6 +271,10 @@ export const PAINTINGS = [
       zoom: 1.3,
       transition: 'flow',
       mood: 'tragic',
+      // The ship pitches in the swell.
+      elements: [
+        { type: 'rock', x: 0.22, y: 0.4, rx: 0.11, ry: 0.13, snap: 'dark', snapRadius: 0.1, bob: 0.005, rock: 0.03, period: 5 },
+      ],
     },
     study: {
       sky: [[0, '#7a3a24'], [0.25, '#c8662e'], [0.42, '#f6d37a'], [0.55, '#e8a55a'], [1, '#3b2a20']],
@@ -293,6 +323,10 @@ export const PAINTINGS = [
       focusY: 0.5,
       transition: 'tiles',
       mood: 'storm',
+      // The steam-boat rolls in the heart of the vortex.
+      elements: [
+        { type: 'rock', x: 0.48, y: 0.46, rx: 0.08, ry: 0.16, snap: 'dark', snapRadius: 0.08, bob: 0.006, rock: 0.035, period: 4.5 },
+      ],
     },
     study: {
       sky: [[0, '#2b2a26'], [0.4, '#6f6a5c'], [0.55, '#cbc3ac'], [1, '#3a3a34']],
@@ -336,6 +370,8 @@ export const PAINTINGS = [
       zoom: 1.3,
       transition: 'dark',
       mood: 'storm',
+      // The pale sun sinks as the storm closes over the army.
+      elements: [{ type: 'rise', x: 'sun', y: 'sun', rx: 0.06, ry: 0.09, matte: 'light', dy: 0.035, light: true }],
     },
     study: {
       aspect: 1.63,
@@ -422,10 +458,29 @@ export const PAINTINGS = [
       smokeY: 0.6,
       smokeColor: '#e8e0cc',
       zoom: 1.55,
-      focusX: 0.68,
-      focusY: 0.62,
+      focusX: 0.6,
+      focusY: 0.6,
       transition: 'brush',
       mood: 'speed',
+      // The locomotive drives along the viaduct toward the viewer.
+      elements: [
+        {
+          type: 'approach',
+          x: 0.7,
+          y: 0.63,
+          rx: 0.085,
+          ry: 0.1,
+          snap: 'dark',
+          snapRadius: 0.12,
+          vx: 'auto',
+          vy: 'auto',
+          zFar: 3.2,
+          zNear: 0.5,
+          period: 12,
+          phase: 0.35,
+          smoke: true,
+        },
+      ],
     },
     study: {
       sky: [[0, '#5d6d78'], [0.3, '#c9c2a2'], [0.45, '#efe2b4'], [0.6, '#c4a46a'], [1, '#4a3a26']],
@@ -466,6 +521,8 @@ export const PAINTINGS = [
       zoom: 1.5,
       transition: 'light',
       mood: 'radiant',
+      // The heart of the vortex breathes.
+      elements: [{ type: 'pulse', x: 'sun', y: 'sun', rx: 0.12, ry: 0.12, matte: 'light', pulse: 0.05, period: 6 }],
     },
     study: {
       aspect: 1,

@@ -97,7 +97,7 @@ uniform float uGlow;
 uniform float uRays;
 uniform float uBreathe;
 uniform float uGrade;
-uniform vec3 uSmoke;
+uniform vec4 uSmoke;
 uniform vec3 uSmokeColor;
 uniform float uRain;
 uniform float uRainAngle;
@@ -109,6 +109,14 @@ uniform float uReveal;
 uniform float uTrans;
 uniform int uTransType;
 uniform vec3 uCanvas;
+uniform sampler2D uLayer0;
+uniform sampler2D uLayer1;
+uniform sampler2D uLayer2;
+uniform int uElemCount;
+uniform vec4 uElemSrc[3];
+uniform vec4 uElemRef[3];
+uniform vec4 uElemXf[3];
+uniform vec4 uElemBlur[3];
 
 vec2 toIso(vec2 p) { return vec2(p.x * uAspect, p.y); }
 vec2 fromIso(vec2 d) { return vec2(d.x / uAspect, d.y); }
@@ -138,6 +146,28 @@ vec2 flowAt(vec2 p, vec4 ana) {
   vec2 along = dir * dot(dir, g);
   float k = clamp(ana.b * uFlowFollow * 1.5, 0.0, 1.0) * smoothstep(0.05, 0.4, length(c2));
   return mix(g * 0.45, along * 1.25, k);
+}
+
+// Technique 8, moving elements: a cut-out layer drawn back over the clean
+// plate at its animated position, scale and angle, with motion blur along
+// its velocity. ref = (centre x, centre y, alpha, layer width in pixels),
+// xf = (offset x, offset y, scale, rotation), blur.zw = pivot offset from
+// the centre (a boat rocks about its waterline).
+vec4 elementColor(sampler2D layer, vec4 src, vec4 ref, vec4 xf, vec4 blur, vec2 p) {
+  vec2 piv = ref.xy + blur.zw;
+  vec2 q = piv + fromIso(rot(-xf.w) * toIso(p - piv - xf.xy) / xf.z);
+  float screenTexel = uView.z / uRes.x / xf.z;
+  float layerTexel = src.z / ref.w;
+  float lod = log2(max(screenTexel / layerTexel, 1.0));
+  vec4 acc = vec4(0.0);
+  for (int k = -2; k <= 2; k++) {
+    vec2 l = (q - blur.xy * float(k) * 0.5 / xf.z - src.xy) / src.zw;
+    float inside = step(0.0, l.x) * step(0.0, l.y) * step(l.x, 1.0) * step(l.y, 1.0);
+    vec4 t = textureLod(layer, clamp(l, 0.0, 1.0), lod) * inside;
+    acc += vec4(t.rgb * t.a, t.a);
+  }
+  acc *= 0.2;
+  return vec4(acc.rgb / max(acc.a, 1e-4), acc.a * ref.z);
 }
 
 float rainLayer(vec2 q, float scale, float speed, float seed) {
@@ -301,6 +331,19 @@ void main() {
   vec3 col = texture(uPaint, p - off * (ph0 - 0.5)).rgb * w0
            + texture(uPaint, p - off * (ph1 - 0.5)).rgb * (1.0 - w0);
 
+  if (uElemCount > 0) {
+    vec4 e = elementColor(uLayer0, uElemSrc[0], uElemRef[0], uElemXf[0], uElemBlur[0], p);
+    col = mix(col, e.rgb, e.a);
+  }
+  if (uElemCount > 1) {
+    vec4 e = elementColor(uLayer1, uElemSrc[1], uElemRef[1], uElemXf[1], uElemBlur[1], p);
+    col = mix(col, e.rgb, e.a);
+  }
+  if (uElemCount > 2) {
+    vec4 e = elementColor(uLayer2, uElemSrc[2], uElemRef[2], uElemXf[2], uElemBlur[2], p);
+    col = mix(col, e.rgb, e.a);
+  }
+
   vec2 q = toIso(p);
 
   // Technique 4, atmosphere: domain-warped mist tinted with the local
@@ -317,7 +360,7 @@ void main() {
 
   // Smoke or steam plume rising from a point and bending with the wind.
   if (uSmoke.z > 0.0) {
-    vec2 rel = toIso(p - uSmoke.xy);
+    vec2 rel = toIso(p - uSmoke.xy) / uSmoke.w;
     float h = -rel.y;
     if (h > -0.03) {
       float x = rel.x - (uWind.x * h * h * 1.5 + 0.06 * h);

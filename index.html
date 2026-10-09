@@ -66,6 +66,11 @@
       </div>
       <p class="hint">Drag the markers on the painting to place the light, vortex, horizon, camera focus and smoke.</p>
       <div id="editorGroups"></div>
+      <section class="group elements-group">
+        <h3>Moving elements</h3>
+        <p class="hint">Objects cut out of the painting and set in motion, like the train on the viaduct. Drag the numbered marker onto an object; the dashed outline is the area that is cut.</p>
+        <div id="elementsEditor"></div>
+      </section>
       <div class="editor-actions">
         <button type="button" id="resetRecipe">Reset</button>
         <button type="button" id="reanalyse">Re-detect light</button>
@@ -124,7 +129,8 @@
           <li><strong>Strokes that move.</strong> The direction of every brushstroke is measured from the image, and the paint is advected along it with a looping flow map, so skies and seas churn the way Turner painted them.</li>
           <li><strong>Depth without cut-outs.</strong> A pseudo depth map from aerial perspective drives 2.5D parallax as the camera glides and the pointer moves.</li>
           <li><strong>Slow camera.</strong> Each painting gets a long push toward its focal point and an easing pull back.</li>
-          <li><strong>Living elements.</strong> Water ripples below the horizon, mist drifts, smoke and steam rise, fire flickers, embers, rain and snow fall or spiral in the vortex.</li>
+          <li><strong>Moving elements.</strong> Objects are cut out of the painting, the background behind them is repainted, and they move: the train runs along the viaduct toward you, boats pitch on the swell, suns rise and set.</li>
+          <li><strong>Living atmosphere.</strong> Water ripples below the horizon, mist drifts, smoke and steam rise, fire flickers, embers, rain and snow fall or spiral in the vortex.</li>
           <li><strong>Light.</strong> A breathing glow and god rays from the light source, pulsing with the music.</li>
           <li><strong>The painting paints itself.</strong> Colour washes first, then the strokes, spreading out from the light.</li>
           <li><strong>Transitions.</strong> Brushstroke wipes, watercolour bleeds, floods of light, melting paint, mosaics.</li>

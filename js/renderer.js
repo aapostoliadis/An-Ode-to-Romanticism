@@ -199,20 +199,42 @@ export class Renderer {
     return this.sceneSize[0] / this.sceneSize[1];
   }
 
-  setPainting(source, analysis) {
+  createMipmapped(source, wrap) {
     const gl = this.gl;
-    for (const t of [this.paint, this.ana, this.depth]) if (t) gl.deleteTexture(t);
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, source);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
     if (this.aniso) gl.texParameterf(gl.TEXTURE_2D, this.aniso.TEXTURE_MAX_ANISOTROPY_EXT, 8);
-    this.paint = tex;
+    return tex;
+  }
+
+  // The painting, or its clean plate when elements have been cut out.
+  setPlate(source) {
+    if (this.paint) this.gl.deleteTexture(this.paint);
+    this.paint = this.createMipmapped(source, this.gl.MIRRORED_REPEAT);
+  }
+
+  // One RGBA cut-out per moving element.
+  setLayers(pieces) {
+    for (const l of this.layers ?? []) this.gl.deleteTexture(l.tex);
+    this.layers = pieces.slice(0, 3).map((p) => ({
+      tex: this.createMipmapped(p.image, this.gl.CLAMP_TO_EDGE),
+      src: p.src,
+      width: p.image.width,
+    }));
+  }
+
+  setPainting(source, analysis) {
+    const gl = this.gl;
+    for (const t of [this.ana, this.depth]) if (t) gl.deleteTexture(t);
+    this.setPlate(source);
     this.ana = this.createTexture(analysis.width, analysis.height, { data: analysis.ana });
     this.depth = this.createTexture(analysis.width, analysis.height, {
       internal: gl.R8,
@@ -277,6 +299,22 @@ export class Renderer {
     this.bind(2, this.depth);
     this.bind(3, dDst.tex);
     this.bind(4, this.prev.tex);
+    const layers = this.layers ?? [];
+    const elems = st.elements ?? [];
+    const count = Math.min(layers.length, elems.length);
+    const src = new Float32Array(12);
+    const ref = new Float32Array(12);
+    const xf = new Float32Array(12);
+    const blur = new Float32Array(12);
+    for (let i = 0; i < 3; i++) {
+      this.bind(5 + i, i < count ? layers[i].tex : null);
+      if (i >= count) continue;
+      const e = elems[i];
+      src.set(layers[i].src, i * 4);
+      ref.set([e.x, e.y, e.alpha, layers[i].width], i * 4);
+      xf.set([e.offset[0], e.offset[1], Math.max(0.02, e.scale), e.rot], i * 4);
+      blur.set([e.blur[0], e.blur[1], e.pivot?.[0] ?? 0, e.pivot?.[1] ?? 0], i * 4);
+    }
     const windRad = (r.windAngle * Math.PI) / 180;
     this.draw(this.programs.scene, this.scene, {
       uPaint: 0,
@@ -303,7 +341,7 @@ export class Renderer {
       uRays: r.rays,
       uBreathe: r.breathe,
       uGrade: r.grade,
-      uSmoke: [r.smokeX, r.smokeY, r.smoke],
+      uSmoke: [r.smokeX, r.smokeY, r.smoke, st.smokeScale ?? 1],
       uSmokeColor: hexToVec3(r.smokeColor),
       uRain: r.rain,
       uRainAngle: (r.rainAngle * Math.PI) / 180,
@@ -315,6 +353,14 @@ export class Renderer {
       uTrans: st.transition,
       uTransType: Math.max(0, TRANSITION_IDS.indexOf(st.transitionType)),
       uCanvas: [0.035, 0.03, 0.026],
+      uLayer0: 5,
+      uLayer1: 6,
+      uLayer2: 7,
+      uElemCount: count,
+      uElemSrc: src,
+      uElemRef: ref,
+      uElemXf: xf,
+      uElemBlur: blur,
     });
 
     // 3. Present: flat projection or the quarry hall.

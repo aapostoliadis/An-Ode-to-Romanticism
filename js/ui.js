@@ -178,50 +178,174 @@ export function buildGallery(container, onSelect) {
 
 // Draggable markers on top of the canvas, used by the editor.
 export class Handles {
-  constructor(root, onDrag) {
+  constructor(root, onDrag, onDragEnd = () => {}) {
     this.root = root;
+    this.onDrag = onDrag;
+    this.onDragEnd = onDragEnd;
     this.els = {};
-    for (const el of root.querySelectorAll('[data-handle]')) this.els[el.dataset.handle] = el;
-    for (const [name, el] of Object.entries(this.els)) {
-      el.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        el.setPointerCapture(e.pointerId);
-        const move = (ev) => onDrag(name, ev.clientX, ev.clientY);
-        const up = () => {
-          el.removeEventListener('pointermove', move);
-          el.removeEventListener('pointerup', up);
-          el.removeEventListener('pointercancel', up);
-        };
-        el.addEventListener('pointermove', move);
-        el.addEventListener('pointerup', up);
-        el.addEventListener('pointercancel', up);
-      });
-    }
+    for (const el of root.querySelectorAll('[data-handle]')) this.bindDrag(el, el.dataset.handle);
+    this.elementEls = [];
+  }
+
+  bindDrag(el, name) {
+    this.els[name] = el;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.setPointerCapture(e.pointerId);
+      const move = (ev) => this.onDrag(name, ev.clientX, ev.clientY);
+      const up = () => {
+        el.removeEventListener('pointermove', move);
+        el.removeEventListener('pointerup', up);
+        el.removeEventListener('pointercancel', up);
+        this.onDragEnd(name);
+      };
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+    });
   }
 
   set visible(v) {
     this.root.hidden = !v;
   }
 
+  // One outline, one marker and (for approaching elements) one vanishing
+  // point marker per moving element.
+  syncElements(count) {
+    while (this.elementEls.length < count) {
+      const i = this.elementEls.length;
+      const outline = document.createElement('div');
+      outline.className = 'element-outline';
+      const marker = document.createElement('button');
+      marker.type = 'button';
+      marker.className = 'handle element';
+      marker.title = `Moving element ${i + 1}: drag onto the object`;
+      marker.textContent = String(i + 1);
+      const vanish = document.createElement('button');
+      vanish.type = 'button';
+      vanish.className = 'handle vanish';
+      vanish.title = `Element ${i + 1}: the point it comes from`;
+      vanish.textContent = '⊙';
+      this.root.append(outline, marker, vanish);
+      this.bindDrag(marker, `element-${i}`);
+      this.bindDrag(vanish, `vanish-${i}`);
+      this.elementEls.push({ outline, marker, vanish });
+    }
+    this.elementEls.forEach((set, i) => {
+      const show = i < count;
+      set.outline.hidden = !show;
+      set.marker.hidden = !show;
+      if (!show) set.vanish.hidden = true;
+    });
+  }
+
   update(toScreen, recipe, width) {
-    const place = (name, x, y, show = true) => {
-      const el = this.els[name];
+    const place = (el, x, y, show = true) => {
       el.hidden = !show;
       if (!show) return;
       const [sx, sy] = toScreen(x, y);
       el.style.left = `${sx}px`;
       el.style.top = `${sy}px`;
     };
-    place('sun', recipe.sunX, recipe.sunY);
-    place('vortex', recipe.vortexX, recipe.vortexY, recipe.vortex > 0.01);
-    place('focus', recipe.focusX, recipe.focusY);
-    place('smoke', recipe.smokeX, recipe.smokeY, recipe.smoke > 0.01);
+    place(this.els.sun, recipe.sunX, recipe.sunY);
+    place(this.els.vortex, recipe.vortexX, recipe.vortexY, recipe.vortex > 0.01);
+    place(this.els.focus, recipe.focusX, recipe.focusY);
+    place(this.els.smoke, recipe.smokeX, recipe.smokeY, recipe.smoke > 0.01);
     const [x0, hy] = toScreen(0, recipe.horizon);
     const [x1] = toScreen(1, recipe.horizon);
     const line = this.els.horizon;
     line.style.left = `${Math.max(0, x0)}px`;
     line.style.width = `${Math.min(width, x1) - Math.max(0, x0)}px`;
     line.style.top = `${hy}px`;
+
+    const elements = recipe.elements ?? [];
+    this.syncElements(elements.length);
+    elements.forEach((el, i) => {
+      const { outline, marker, vanish } = this.elementEls[i];
+      place(marker, el.x, el.y);
+      place(vanish, el.vx, el.vy, el.type === 'approach');
+      const [ax, ay] = toScreen(el.x - el.rx, el.y - el.ry);
+      const [bx, by] = toScreen(el.x + el.rx, el.y + el.ry);
+      outline.style.left = `${ax}px`;
+      outline.style.top = `${ay}px`;
+      outline.style.width = `${bx - ax}px`;
+      outline.style.height = `${by - ay}px`;
+    });
   }
+}
+
+// Editor section listing the moving elements of the current painting.
+export function buildElementsEditor(container, { onChange, onAdd, onRemove }) {
+  const list = document.createElement('div');
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'add-element';
+  add.textContent = '+ Add moving element';
+  add.addEventListener('click', onAdd);
+  container.append(list, add);
+
+  const slider = (label, value, min, max, step, onInput) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const lab = document.createElement('label');
+    const name = document.createElement('span');
+    name.textContent = label;
+    const out = document.createElement('output');
+    out.textContent = Number(value).toFixed(2);
+    lab.append(name, out);
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = min;
+    input.max = max;
+    input.step = step;
+    input.value = value;
+    input.setAttribute('aria-label', label);
+    input.addEventListener('input', () => {
+      out.textContent = Number(input.value).toFixed(2);
+      onInput(Number(input.value));
+    });
+    row.append(lab, input);
+    return row;
+  };
+
+  return {
+    render(elements, types, max) {
+      list.replaceChildren();
+      elements.forEach((el, i) => {
+        const card = document.createElement('div');
+        card.className = 'element-card';
+        const head = document.createElement('div');
+        head.className = 'element-head';
+        const title = document.createElement('span');
+        title.textContent = `Element ${i + 1}`;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = 'Remove';
+        remove.addEventListener('click', () => onRemove(i));
+        head.append(title, remove);
+        const typeRow = document.createElement('div');
+        typeRow.className = 'row';
+        const select = document.createElement('select');
+        select.setAttribute('aria-label', `Element ${i + 1} motion`);
+        for (const t of types) {
+          const o = document.createElement('option');
+          o.value = t.id;
+          o.textContent = t.label;
+          select.append(o);
+        }
+        select.value = el.type;
+        select.addEventListener('change', () => onChange(i, 'type', select.value));
+        typeRow.append(select);
+        card.append(
+          head,
+          typeRow,
+          slider('Motion', el.amount ?? 1, 0, 2, 0.01, (v) => onChange(i, 'amount', v)),
+          slider('Size', el.rx, 0.02, 0.35, 0.005, (v) => onChange(i, 'size', v)),
+        );
+        list.append(card);
+      });
+      add.hidden = elements.length >= max;
+    },
+  };
 }

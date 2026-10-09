@@ -14,7 +14,7 @@
 
 const MAX_DIM = 384;
 
-function boxBlur(src, w, h, r) {
+export function boxBlur(src, w, h, r) {
   if (r < 1) return src.slice();
   const tmp = new Float32Array(w * h);
   const out = new Float32Array(w * h);
@@ -289,6 +289,7 @@ export function analysePainting(source) {
     horizon: { y: horizon, confidence: hConfidence },
     stats: { meanLum, warmFraction: warmCount / N },
     aspect: sw / sh,
+    lum: lb,
   };
 }
 

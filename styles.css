@@ -453,6 +453,34 @@ body.idle {
   padding: 6px 8px;
 }
 
+.element-card {
+  margin: 8px 0;
+  padding: 8px 10px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(243, 234, 215, 0.03);
+}
+
+.element-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+  color: #8fd3ff;
+}
+
+.element-head button {
+  padding: 3px 9px;
+  font-size: 11.5px;
+}
+
+.add-element {
+  width: 100%;
+  margin-top: 6px;
+  border-style: dashed;
+  font-size: 12.5px;
+}
+
 .editor-actions {
   display: flex;
   flex-wrap: wrap;
@@ -529,6 +557,36 @@ body.idle {
 
 .handle[hidden] {
   display: none;
+}
+
+.handle.element {
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 7px;
+  border-color: #8fd3ff;
+  color: #8fd3ff;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 4;
+}
+
+.handle.vanish {
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-style: dashed;
+  border-color: #8fd3ff;
+  color: #8fd3ff;
+  font-size: 13px;
+  z-index: 4;
+}
+
+.element-outline {
+  position: absolute;
+  border: 1.5px dashed rgba(143, 211, 255, 0.75);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .horizon-line {
