@@ -342,15 +342,19 @@ function showProgress(tau, dur) {
   return clamp(u, 0, 1);
 }
 
-// Zoom at which the whole painting is in view (below 1 when the screen and
-// the painting have different shapes; 1 fills the screen).
+// The opening zoom (1 fills the screen). On a landscape screen the painting
+// fills it edge to edge, with no dark bands beside or above it: a screen
+// wider than the painting crops a little of its top and bottom, a narrower
+// one a little of its sides. On a portrait screen the whole painting stays
+// in view, as filling it would crop most of a landscape canvas.
 function fitZoom() {
   const sa = renderer.sceneAspect;
   const pa = state.current.analysis.aspect;
+  if (sa >= 1) return 1;
   return Math.min(1, sa > pa ? pa / sa : sa / pa);
 }
 
-// Every painting opens fully zoomed out, the whole canvas in view, and holds
+// Every painting opens fully zoomed out, filling the screen, and holds
 // there through its title. The camera then moves in only a little (the
 // push, 0 to 0.5, is relative to that opening view) and draws back part of
 // the way: the life of the painting is in its own motion, not the camera.

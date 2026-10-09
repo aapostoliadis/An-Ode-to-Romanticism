@@ -70,7 +70,7 @@ export const CONTROL_GROUPS = [
     title: 'Camera and show',
     items: [
       // Shown as the push itself: 0.00 is no push (the stored zoom is 1).
-      { key: 'zoom', label: 'Camera push', min: 1, max: 1.5, step: 0.01, shift: -1, hint: 'How far the camera moves in toward the focus marker (✛), from the fully zoomed-out opening view. 0.00 keeps the whole painting in view; 0.50 is the most.' },
+      { key: 'zoom', label: 'Camera push', min: 1, max: 1.5, step: 0.01, shift: -1, hint: 'How far the camera moves in toward the focus marker (✛), from the fully zoomed-out opening view. 0.00 keeps that view; 0.50 is the most.' },
       { key: 'duration', label: 'Time on the wall', min: 12, max: 120, step: 1, unit: 's', hint: 'Seconds on the wall before the show moves on to the next painting.' },
       { key: 'transition', label: 'Arrives with', type: 'select', options: TRANSITIONS, hint: 'How this painting arrives: brushstroke wipe, watercolour bleed, flood of light, paint flowing away, through darkness or mosaic tiles.' },
     ],
