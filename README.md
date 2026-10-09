@@ -1,4 +1,4 @@
-# Turner lumières
+# An Ode to Romanticism
 
 An immersive, animated painting program in the manner of the Carrières des Lumières shows in Les Baux-de-Provence, built around the paintings of J. M. W. Turner. It runs in the browser on WebGL2, with no build step and no dependencies.
 

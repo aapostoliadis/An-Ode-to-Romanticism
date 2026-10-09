@@ -27,7 +27,7 @@ export class Recorder {
     return Boolean(this.rec && this.rec.state === 'recording');
   }
 
-  start(audioStream, name = 'turner-lumieres') {
+  start(audioStream, name = 'an-ode-to-romanticism') {
     const stream = this.canvas.captureStream(30);
     if (audioStream) for (const track of audioStream.getAudioTracks()) stream.addTrack(track);
     const mimeType = MIME_TYPES.find((m) => MediaRecorder.isTypeSupported(m)) ?? '';
@@ -53,7 +53,7 @@ export class Recorder {
 
   // Must be called right after a frame is drawn, before the browser clears
   // the drawing buffer.
-  snapshot(name = 'turner-lumieres') {
+  snapshot(name = 'an-ode-to-romanticism') {
     this.canvas.toBlob((blob) => blob && download(blob, `${name}.png`), 'image/png');
   }
 }

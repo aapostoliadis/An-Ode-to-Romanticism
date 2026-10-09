@@ -859,6 +859,12 @@ button.primary:hover {
 }
 
 @media (max-width: 520px) {
+  .brand-mark {
+    font-size: 17px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
   .controls button:not(.icon) {
     padding: 7px 10px;
     font-size: 12.5px;
