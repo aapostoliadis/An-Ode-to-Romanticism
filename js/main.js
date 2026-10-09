@@ -37,8 +37,8 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 const TRANSITION_SECONDS = { brush: 3.4, bleed: 3.8, light: 3.6, flow: 3.4, dark: 3, tiles: 3.6 };
 const REVEAL_SECONDS = 8;
 // Bumped when the shape of a score changes, so old saved edits do not hide
-// new defaults (v4: a minimal camera push, stronger waves and ships).
-const STORAGE_PREFIX = 'turner-lumieres:recipe:v4:';
+// new defaults (v5: rough seas, foam, flags, sunbeams).
+const STORAGE_PREFIX = 'turner-lumieres:recipe:v5:';
 
 let renderer;
 try {
@@ -512,7 +512,7 @@ function frame(now) {
       return lerp(v, m, 1 - Math.exp(-dt * 2));
     });
     const views = layerViews(r, motion);
-    const { recipe, elements, smokeScale } = animateElements(r, motion);
+    const { recipe, elements, smokeScale, foam } = animateElements(r, motion);
     ambient.update(soundScene(recipe, elements, views.land));
     renderer.render({
       recipe,
@@ -521,6 +521,7 @@ function frame(now) {
       viewWater: views.water,
       showLayers: state.showLayers,
       smokeScale,
+      foam,
       time: state.time,
       view: views.land,
       mouse: state.mouse,
@@ -577,8 +578,11 @@ function animateElements(r, motion) {
   const live = { ...r, flow: r.flow * motion };
   let smokeScale = 1;
   let smokeTaken = false;
+  const foam = [];
   const elements = r.elements.map((el) => {
     const st = elementState(el, state.elemTime, progress, motion);
+    // Foam at the waterline (about the rocking pivot) and in front of it.
+    if (el.foam > 0) foam.push([el.x + st.offset[0], el.y + st.offset[1] + el.ry * 0.7, el.rx * 1.3, el.foam * st.alpha]);
     const cx = el.x + st.offset[0];
     const cy = el.y + st.offset[1];
     if (el.smoke && !smokeTaken) {
@@ -592,9 +596,9 @@ function animateElements(r, motion) {
       live.sunX = r.sunX + st.offset[0];
       live.sunY = r.sunY + st.offset[1];
     }
-    return { x: el.x, y: el.y, ...st };
+    return { x: el.x, y: el.y, flags: el.flags ?? 0, ...st };
   });
-  return { recipe: live, elements, smokeScale };
+  return { recipe: live, elements, smokeScale, foam };
 }
 
 // What the sound effects need to know: the soundscape, the live weather of

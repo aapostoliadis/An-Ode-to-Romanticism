@@ -61,6 +61,8 @@ export const DEFAULT_RECIPE = {
   grade: 0.15,
   horizon: 'auto',
   water: 0.6,
+  sea: 0.4, // 0 a calm river, 1 an open sea of crossing waves
+  foam: 0, // whitecaps on the crests
   mist: 0.3,
   smoke: 0,
   smokeX: 0.5,
@@ -127,19 +129,22 @@ export const PAINTINGS = [
       wind: 0.35,
       windAngle: -10,
       glow: 0.85,
-      rays: 0.6,
+      rays: 0.95,
       sunColor: '#ffd88a',
       water: 0.9,
+      sea: 0.85,
+      foam: 0.5,
       mist: 0.3,
       grade: 0.25,
       zoom: 1.15,
       transition: 'light',
       mood: 'myth',
       sounds: 'sea',
-      // The sun climbs out of the sea; the galleon sways from its waterline.
+      // The sun climbs out of the sea; the galleon pitches on the swell with
+      // white water at its bow, drifts slowly to the left, pennants flying.
       elements: [
         { type: 'rise', x: 'sun', y: 'sun', rx: 0.07, ry: 0.09, matte: 'light', dy: -0.08, light: true },
-        { type: 'rock', x: 0.41, y: 0.48, rx: 0.15, ry: 0.22, bob: 0.006, rock: 0.03, dx: 0.03, period: 7, pivot: 0.75 },
+        { type: 'rock', x: 0.41, y: 0.48, rx: 0.15, ry: 0.22, bob: 0.006, rock: 0.03, dx: -0.05, period: 7, pivot: 0.75, foam: 1, flags: 1 },
       ],
     },
     study: {
@@ -175,6 +180,7 @@ export const PAINTINGS = [
       grade: 0.08,
       sunColor: '#fff4d6',
       water: 0.65,
+      sea: 0,
       mist: 0.75,
       skyDrift: 0.25,
       landSway: 0.15,
@@ -213,13 +219,15 @@ export const PAINTINGS = [
     ],
     recipe: {
       flow: 0.35,
-      wind: 0.25,
+      wind: 0.45,
+      windAngle: 205,
       glow: 0.85,
-      rays: 0.55,
+      rays: 0.95,
       sunColor: '#ffcf7d',
       water: 0.85,
+      sea: 0.25,
       mist: 0.3,
-      smoke: 0.35,
+      smoke: 0.65,
       smokeX: 0.38,
       smokeY: 0.52,
       smokeColor: '#3a3029',
@@ -228,7 +236,8 @@ export const PAINTINGS = [
       transition: 'brush',
       mood: 'warm',
       sounds: 'harbour',
-      // The tug chugs with its smoke; the sun sinks toward the horizon.
+      // The tug chugs with white water at its bow, its smoke trailing off to
+      // the upper left; the sun sinks toward the horizon in a fan of rays.
       elements: [
         {
           type: 'rock',
@@ -241,6 +250,7 @@ export const PAINTINGS = [
           bob: 0.007,
           rock: 0.035,
           period: 3.2,
+          foam: 0.9,
           smoke: true,
         },
         { type: 'rise', x: 'sun', y: 'sun', rx: 0.05, ry: 0.07, matte: 'light', dy: 0.05, light: true },
@@ -283,6 +293,8 @@ export const PAINTINGS = [
       rays: 0.5,
       sunColor: '#ffcf70',
       water: 1.3,
+      sea: 1,
+      foam: 0.8,
       mist: 0.2,
       snow: 0.2,
       fire: 0.15,
@@ -293,7 +305,7 @@ export const PAINTINGS = [
       sounds: 'tempest',
       // The ship pitches in the swell.
       elements: [
-        { type: 'rock', x: 0.22, y: 0.4, rx: 0.11, ry: 0.13, snap: 'dark', snapRadius: 0.1, bob: 0.012, rock: 0.065, period: 4.2 },
+        { type: 'rock', x: 0.22, y: 0.4, rx: 0.11, ry: 0.13, snap: 'dark', snapRadius: 0.1, bob: 0.012, rock: 0.065, period: 4.2, foam: 1 },
       ],
     },
     study: {
@@ -338,6 +350,8 @@ export const PAINTINGS = [
       rays: 0.15,
       sunColor: '#f3ead2',
       water: 0.85,
+      sea: 1,
+      foam: 0.7,
       zoom: 1.15,
       focusX: 0.5,
       focusY: 0.5,
@@ -348,7 +362,7 @@ export const PAINTINGS = [
       sounds: 'blizzard',
       // The steam-boat rolls in the heart of the vortex.
       elements: [
-        { type: 'rock', x: 0.48, y: 0.46, rx: 0.08, ry: 0.16, snap: 'dark', snapRadius: 0.08, bob: 0.013, rock: 0.075, period: 3.6 },
+        { type: 'rock', x: 0.48, y: 0.46, rx: 0.08, ry: 0.16, snap: 'dark', snapRadius: 0.08, bob: 0.013, rock: 0.075, period: 3.6, foam: 1 },
       ],
     },
     study: {
@@ -378,19 +392,23 @@ export const PAINTINGS = [
       },
     ],
     recipe: {
-      flow: 0.7,
-      flowSpeed: 0.15,
-      vortex: 0.8,
+      // The black storm arc wheels around the sun along its own curve: the
+      // paint follows its strokes, steered by the vortex, with no sideways
+      // drift to pull it out of shape.
+      flow: 1,
+      flowSpeed: 0.18,
+      flowFollow: 1,
+      vortex: 1.2,
       vortexX: 'sun',
       vortexY: 'sun',
-      vortexRadius: 0.6,
+      vortexRadius: 0.75,
       snow: 0.8,
       mist: 0.3,
       glow: 0.55,
       rays: 0.45,
       sunColor: '#ffd99a',
       water: 0,
-      skyDrift: 0.7,
+      skyDrift: 0.15,
       landAbove: false,
       zoom: 1.15,
       transition: 'dark',
@@ -438,6 +456,7 @@ export const PAINTINGS = [
       rays: 0.35,
       sunColor: '#ffb560',
       water: 0.8,
+      sea: 0.15,
       mist: 0.2,
       grade: 0.35,
       zoom: 1.15,
@@ -481,6 +500,7 @@ export const PAINTINGS = [
       rays: 0.25,
       sunColor: '#fff0c8',
       water: 0.5,
+      sea: 0.1,
       smoke: 0.35,
       smokeX: 0.669,
       smokeY: 0.545,

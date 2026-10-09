@@ -33,17 +33,18 @@ export const ELEMENT_TYPES = [
 // long it waits where it is painted before it sets off, in seconds.
 const TYPE_DEFAULTS = {
   approach: { period: 13, vx: 'auto', vy: 'auto', zNear: 0.25, delay: 3, phase: 0 },
-  drift: { dx: 0.05, dy: 0, bob: 0.005, rock: 0.015, period: 8, pivot: 0.6 },
-  rock: { dx: 0, dy: 0, bob: 0.008, rock: 0.05, period: 4.5, pivot: 0.8 },
+  drift: { dx: 0.05, dy: 0, bob: 0.005, rock: 0.015, period: 8, pivot: 0.6, foam: 0.3 },
+  rock: { dx: 0, dy: 0, bob: 0.008, rock: 0.05, period: 4.5, pivot: 0.8, foam: 0.5 },
   rise: { dx: 0, dy: -0.05, bob: 0, rock: 0, period: 10, pivot: 0 },
   pulse: { pulse: 0.06, period: 7 },
 };
 
 // angle: tilt of the cut-out ellipse in degrees (clockwise), so a long
 // object lying on a diagonal, like a train, is cut tightly.
-const BASE = { type: 'drift', x: 0.5, y: 0.5, rx: 0.08, ry: 0.08, angle: 0, matte: 'auto', amount: 1, smoke: false, light: false };
+// foam: white water at the waterline; flags: how much red pennants flutter.
+const BASE = { type: 'drift', x: 0.5, y: 0.5, rx: 0.08, ry: 0.08, angle: 0, matte: 'auto', amount: 1, foam: 0, flags: 0, smoke: false, light: false };
 const NUMBER_KEYS = [
-  'x', 'y', 'rx', 'ry', 'angle', 'amount', 'period', 'vx', 'vy', 'zNear', 'delay', 'phase', 'dx', 'dy', 'bob', 'rock', 'pivot', 'pulse',
+  'x', 'y', 'rx', 'ry', 'angle', 'amount', 'period', 'vx', 'vy', 'zNear', 'delay', 'phase', 'dx', 'dy', 'bob', 'rock', 'pivot', 'pulse', 'foam', 'flags',
 ];
 const MATTES = ['auto', 'dark', 'light', 'ellipse'];
 
@@ -60,8 +61,8 @@ export function makeElement(partial = {}) {
 
 // Switching type keeps the region and swaps in that type's motion.
 export function retypeElement(el, type) {
-  const { x, y, rx, ry, angle, matte, amount, smoke, light, shape } = el;
-  return makeElement({ x, y, rx, ry, angle, matte, amount, smoke, light, shape, type });
+  const { x, y, rx, ry, angle, matte, amount, smoke, light, shape, flags } = el;
+  return makeElement({ x, y, rx, ry, angle, matte, amount, smoke, light, shape, flags, type });
 }
 
 // An outline is a list of [along, across] points in the element's own

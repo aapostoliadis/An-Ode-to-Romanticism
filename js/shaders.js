@@ -128,6 +128,15 @@ uniform vec4 uElemSrc[3];
 uniform vec4 uElemRef[3];
 uniform vec4 uElemXf[3];
 uniform vec4 uElemBlur[3];
+// Per element: x = how much red flags and pennants on it flutter.
+uniform vec4 uElemFx[3];
+// Sea state: 0 a calm river, 1 an open sea of crossing waves. Caps: foam on
+// the crests. Foam spots: white water at a boat's waterline (x, y, half
+// width, strength).
+uniform float uSea;
+uniform float uCaps;
+uniform vec4 uFoam[3];
+uniform int uFoamCount;
 
 vec2 toIso(vec2 p) { return vec2(p.x * uAspect, p.y); }
 vec2 fromIso(vec2 d) { return vec2(d.x / uAspect, d.y); }
@@ -164,12 +173,23 @@ vec2 flowAt(vec2 p, vec4 ana) {
 // its velocity. ref = (centre x, centre y, alpha, layer width in pixels),
 // xf = (offset x, offset y, scale, rotation), blur.zw = pivot offset from
 // the centre (a boat rocks about its waterline).
-vec4 elementColor(sampler2D layer, vec4 src, vec4 ref, vec4 xf, vec4 blur, vec2 p) {
+vec4 elementColor(sampler2D layer, vec4 src, vec4 ref, vec4 xf, vec4 blur, vec4 fx, vec2 p) {
   vec2 piv = ref.xy + blur.zw;
   vec2 q = piv + fromIso(rot(-xf.w) * toIso(p - piv - xf.xy) / xf.z);
   float screenTexel = uView.z / uRes.x / xf.z;
   float layerTexel = src.z / ref.w;
   float lod = log2(max(screenTexel / layerTexel, 1.0));
+  // Flags and pennants: strongly red paint in the upper part of a ship
+  // ripples in waves running out along it, as cloth does in the wind;
+  // masts, sails and hull stay still.
+  if (fx.x > 0.0) {
+    vec4 c0 = textureLod(layer, clamp((q - src.xy) / src.zw, 0.0, 1.0), lod + 1.5);
+    float red = smoothstep(0.06, 0.2, c0.r - max(c0.g, c0.b)) * smoothstep(0.25, 0.45, c0.r) * c0.a;
+    float upper = 1.0 - smoothstep(ref.y - 0.03, ref.y + 0.02, q.y);
+    float wv = sin(q.x * 190.0 - uTime * 7.5) * 0.6 + sin(q.x * 103.0 + q.y * 40.0 - uTime * 4.6) * 0.4;
+    q.y += wv * fx.x * 0.0045 * red * upper;
+    q.x += cos(q.x * 150.0 - uTime * 6.0) * fx.x * 0.0015 * red * upper;
+  }
   vec4 acc = vec4(0.0);
   for (int k = -2; k <= 2; k++) {
     vec2 l = (q - blur.xy * float(k) * 0.5 / xf.z - src.xy) / src.zw;
@@ -179,6 +199,13 @@ vec4 elementColor(sampler2D layer, vec4 src, vec4 ref, vec4 xf, vec4 blur, vec2 
   }
   acc *= 0.2;
   return vec4(acc.rgb / max(acc.a, 1e-4), acc.a * ref.z);
+}
+
+// Foam: soft, billowing white water that churns over time.
+float fluff(vec2 q, float t) {
+  float a = fbm(q * 9.0 + vec2(t * 0.12, -t * 0.22));
+  float b = fbm(q * 21.0 - vec2(t * 0.28, t * 0.09) + a * 1.6);
+  return smoothstep(0.42, 0.82, a * 0.6 + b * 0.55);
 }
 
 float rainLayer(vec2 q, float scale, float speed, float seed) {
@@ -334,16 +361,25 @@ void main() {
   vec2 pr = pW;
   float dy = pW.y - uHorizon;
   float shade = 1.0;
+  float caps = 0.0;
   if (uWater > 0.0 && dy > 0.0) {
     float z = 0.05 / (dy + 0.02);
     float near = smoothstep(0.0, 0.06, dy) * (0.4 + dy * 2.5);
+    // On the water plane: X across, z into the distance.
+    vec2 W = vec2((pW.x - 0.5) * uAspect * z, z);
     float bend = vnoise(vec2(pW.x * 3.0, z * 2.0 + t * 0.05)) * 4.0;
     float ph = z * 38.0 + t * 1.2 + bend;
-    float swell = sin(ph);
+    // A river has one gentle swell; a sea has crossing trains of waves
+    // that build into groups and fall away, never in step.
+    float w2 = sin(dot(W, vec2(24.0, 26.0)) + t * 1.55 + vnoise(W * 3.0 + t * 0.07) * 3.0);
+    float w3 = sin(dot(W, vec2(-27.0, 22.0)) + t * 1.35 + 1.7);
+    float group = 0.45 + 0.85 * vnoise(W * vec2(3.0, 2.0) + vec2(t * 0.09, -t * 0.13));
+    float swell = mix(sin(ph), (sin(ph) * 0.5 + w2 * 0.35 + w3 * 0.35) * group, uSea);
     pr.y -= swell * uWater * 0.01 * near;
     pr.x += cos(ph) * uWater * 0.003 * near / uAspect;
-    float crest = smoothstep(0.6, 1.0, swell);
+    float crest = smoothstep(0.55 - 0.15 * uSea, 1.0, swell);
     shade = 1.0 + (swell * 0.08 + crest * 0.16) * uWater * min(near, 1.0);
+    caps = crest * crest * fluff(vec2(pW.x * uAspect, z * 0.6), t) * uCaps * min(near * 1.4, 1.0);
     vec2 wp = vec2((pW.x - 0.5) * uAspect * z * 4.0, z * 3.0);
     vec2 rip = vec2(vnoise(wp * 1.7 + vec2(t * 0.25, -t * 0.6)),
                     vnoise(wp * 1.7 + vec2(7.1 - t * 0.2, 3.3 - t * 0.5))) - 0.5;
@@ -352,6 +388,8 @@ void main() {
     pr += rip * uWater * 0.016 * near * vec2(1.0 / uAspect, 0.5);
   }
   vec3 waterCol = flowSample(pr, uFlow * 0.55, vec2(uSkyDir.x * uSkyDrift * 0.2, 0.0)) * shade;
+  vec3 foamCol = mix(vec3(0.96, 0.94, 0.89), textureLod(uPaint, p, 5.0).rgb * 1.5, 0.3);
+  waterCol = mix(waterCol, foamCol, clamp(caps, 0.0, 0.9));
   vec4 mW = texture(uLayerMask, pW);
   // Below the horizon the water also runs on behind the land.
   float waterA = clamp(smoothstep(0.25, 0.6, mW.g) + uHasWater * mW.b * smoothstep(-0.01, 0.03, dy), 0.0, 1.0);
@@ -370,16 +408,31 @@ void main() {
 
   // Figures: cut-out moving elements, in front of the land.
   if (uElemCount > 0) {
-    vec4 e = elementColor(uLayer0, uElemSrc[0], uElemRef[0], uElemXf[0], uElemBlur[0], p);
+    vec4 e = elementColor(uLayer0, uElemSrc[0], uElemRef[0], uElemXf[0], uElemBlur[0], uElemFx[0], p);
     col = mix(col, e.rgb, e.a);
   }
   if (uElemCount > 1) {
-    vec4 e = elementColor(uLayer1, uElemSrc[1], uElemRef[1], uElemXf[1], uElemBlur[1], p);
+    vec4 e = elementColor(uLayer1, uElemSrc[1], uElemRef[1], uElemXf[1], uElemBlur[1], uElemFx[1], p);
     col = mix(col, e.rgb, e.a);
   }
   if (uElemCount > 2) {
-    vec4 e = elementColor(uLayer2, uElemSrc[2], uElemRef[2], uElemXf[2], uElemBlur[2], p);
+    vec4 e = elementColor(uLayer2, uElemSrc[2], uElemRef[2], uElemXf[2], uElemBlur[2], uElemFx[2], p);
     col = mix(col, e.rgb, e.a);
+  }
+
+  // White water churning at the waterline of each boat and spreading in
+  // front of it, toward the viewer; it rides the hull's motion.
+  for (int i = 0; i < 3; i++) {
+    if (i >= uFoamCount) break;
+    vec4 f = uFoam[i];
+    vec2 d = vec2((p.x - f.x) / f.z, (p.y - f.y) / (f.z * 0.2 * uAspect));
+    float wash = fluff(vec2(p.x * uAspect, p.y) * 2.2, t * 1.4);
+    // A broken band along the hull, frayed by the foam itself, thicker
+    // where it spreads toward the viewer than above the waterline.
+    float r = length(vec2(d.x, d.y > 0.0 ? d.y * 0.45 : d.y * 2.4)) + (wash - 0.5) * 0.35;
+    float m = (1.0 - smoothstep(0.5, 1.0, r)) * f.w;
+    vec3 fc = mix(vec3(0.97, 0.95, 0.9), textureLod(uPaint, p, 5.0).rgb * 1.5, 0.25);
+    col = mix(col, fc, clamp(m * (0.15 + 0.85 * wash), 0.0, 0.85));
   }
 
   vec2 q = toIso(p);
@@ -425,12 +478,15 @@ void main() {
     vec2 rel = toIso(p - uSmoke.xy) / uSmoke.w;
     float h = -rel.y;
     if (h > -0.03) {
-      float x = rel.x - (uWind.x * h * h * 1.5 + 0.06 * h);
-      float width = 0.012 + max(h, 0.0) * 0.22;
+      // It leans with the wind as it climbs, spreads and thins away into
+      // the air, paling toward the colour of the sky.
+      float x = rel.x - (uWind.x * (h * h * 3.0 + 0.35 * h) + 0.03 * h);
+      float width = 0.012 + max(h, 0.0) * 0.3;
       float n = fbm(vec2(x * 9.0, h * 6.0 - t * 0.35));
-      float d = exp(-x * x / (width * width)) * smoothstep(-0.03, 0.02, h) * exp(-max(h, 0.0) * 2.2);
+      float d = exp(-x * x / (width * width)) * smoothstep(-0.03, 0.02, h) * exp(-max(h, 0.0) * 2.6);
       float dens = clamp(d * (n * 1.6 - 0.25), 0.0, 1.0) * uSmoke.z;
-      col = mix(col, uSmokeColor * (0.8 + 0.4 * n), dens * 0.85);
+      vec3 smokeCol = mix(uSmokeColor, textureLod(uPaint, p, 5.0).rgb, smoothstep(0.0, 0.6, h) * 0.6);
+      col = mix(col, smokeCol * (0.8 + 0.4 * n), dens * 0.85);
     }
   }
 
@@ -467,6 +523,12 @@ void main() {
     float a = atan(sd.y, sd.x);
     float flick = 0.8 + 0.2 * sin(t * 0.35 + a * 7.0) * sin(t * 0.21 - a * 3.0);
     col = screen(col, acc / 24.0 * uRays * 3.2 * breathe * flick);
+    // Beams fanning out from the sun across the sky, turning slowly.
+    vec2 dir = sd / max(sr, 1e-4);
+    float beams = vnoise(dir * 5.0 + vec2(t * 0.02, -t * 0.015)) * 0.65 + vnoise(dir * 13.0 - vec2(t * 0.03, 0.0)) * 0.35;
+    beams = smoothstep(0.42, 0.9, beams);
+    float fall = smoothstep(0.03, 0.12, sr) * exp(-sr / 0.5);
+    col = screen(col, uSunColor * beams * fall * uRays * 0.5 * breathe);
   }
 
   // Technique 6, procedural elements: rain, falling snow, embers.

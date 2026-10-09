@@ -49,6 +49,8 @@ export const CONTROL_GROUPS = [
     title: 'Water and air',
     items: [
       { key: 'water', label: 'Waves and ripples', min: 0, max: 2, step: 0.01, hint: 'A swell rolling toward you across the water below the horizon, with its crests catching the light, and ripples over it, stronger toward you.' },
+      { key: 'sea', label: 'Rough sea', min: 0, max: 1, step: 0.01, hint: 'From a calm river (0) to an open sea (1): crossing trains of waves that build into groups and fall away.' },
+      { key: 'foam', label: 'Whitecaps', min: 0, max: 1.2, step: 0.01, hint: 'Fluffy white foam breaking on the wave crests.' },
       { key: 'mist', label: 'Mist', min: 0, max: 1.2, step: 0.01, hint: 'Drifting mist, densest along the horizon.' },
       { key: 'smoke', label: 'Smoke or steam', min: 0, max: 1, step: 0.01, hint: 'A plume of smoke or steam rising from the smoke marker (≋) and bending with the wind.' },
       { key: 'smokeColor', label: 'Smoke colour', type: 'color', hint: 'Colour of the smoke or steam.' },
@@ -393,6 +395,8 @@ export function buildElementsEditor(container, { onChange, onAdd, onRemove }) {
           slider('Motion', el.amount ?? 1, 0, 2, 0.01, (v) => onChange(i, 'amount', v), 'How much the element moves. 0 holds it still.'),
           slider('Size', el.rx, 0.02, 0.35, 0.005, (v) => onChange(i, 'size', v), 'Size of the area cut out, shown by the dashed outline.'),
           slider('Tilt', el.angle ?? 0, -75, 75, 1, (v) => onChange(i, 'angle', v), 'Turns the cut-out area to lie along a diagonal object, like a train on its track.'),
+          slider('Foam', el.foam ?? 0, 0, 1.5, 0.01, (v) => onChange(i, 'foam', v), 'White water churning at the waterline of a boat and spreading in front of it.'),
+          slider('Flags', el.flags ?? 0, 0, 2, 0.01, (v) => onChange(i, 'flags', v), 'How much red flags and pennants on it flutter in the wind.'),
         );
         list.append(card);
       });

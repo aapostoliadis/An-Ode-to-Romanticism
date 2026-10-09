@@ -307,6 +307,7 @@ export class Renderer {
     const ref = new Float32Array(12);
     const xf = new Float32Array(12);
     const blur = new Float32Array(12);
+    const fx = new Float32Array(12);
     for (let i = 0; i < 3; i++) {
       this.bind(5 + i, i < count ? layers[i].tex : null);
       if (i >= count) continue;
@@ -315,7 +316,11 @@ export class Renderer {
       ref.set([e.x, e.y, e.alpha, layers[i].width], i * 4);
       xf.set([e.offset[0], e.offset[1], Math.max(0.02, e.scale), e.rot], i * 4);
       blur.set([e.blur[0], e.blur[1], e.pivot?.[0] ?? 0, e.pivot?.[1] ?? 0], i * 4);
+      fx.set([e.flags ?? 0, 0, 0, 0], i * 4);
     }
+    const foam = new Float32Array(12);
+    const foamCount = Math.min(3, st.foam?.length ?? 0);
+    for (let i = 0; i < foamCount; i++) foam.set(st.foam[i], i * 4);
     this.bind(8, this.layerMask);
     this.bind(9, this.skyFill);
     this.bind(10, this.waterFill);
@@ -377,6 +382,11 @@ export class Renderer {
       uElemRef: ref,
       uElemXf: xf,
       uElemBlur: blur,
+      uElemFx: fx,
+      uSea: r.sea ?? 0.4,
+      uCaps: r.foam ?? 0,
+      uFoam: foam,
+      uFoamCount: foamCount,
     });
 
     // 3. Present.

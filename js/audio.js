@@ -44,14 +44,32 @@ const SCAPES = {
   sea: { waves: 0.6, gulls: 0.6, creak: 0.5, lap: 0.25 },
   river: { lap: 0.6, birds: 0.8, drips: 0.25 },
   harbour: { lap: 0.5, gulls: 0.3, paddle: 0.7, shipBell: 0.5 },
-  tempest: { waves: 1, wind: 0.6, thunder: 0.6, creak: 0.5 },
-  blizzard: { wind: 1, waves: 0.65, paddle: 0.4, shipBell: 0.35 },
-  alps: { wind: 0.9, thunder: 0.8, horn: 0.5 },
-  fire: { roar: 0.3, crackle: 1, flare: 1, crash: 0.18, alarm: 0.3, lap: 0.15 },
+  // A heavy sea: breakers that boom and roar, a deep swell under them, and
+  // carried on the storm, cries for help.
+  tempest: { waves: 1.6, seaRoar: 1, wind: 0.6, thunder: 0.6, creak: 0.5, cries: 0.75, every: { waves: [2.6, 5.2] } },
+  blizzard: { wind: 1, waves: 1.5, seaRoar: 0.9, paddle: 0.4, shipBell: 0.35, every: { waves: [2.8, 5.5] } },
+  // The army on the pass: soldiers calling in their own tongue, the column
+  // murmuring far off, armour and weapons clinking.
+  alps: { wind: 0.9, thunder: 0.8, horn: 0.5, shouts: 0.7, army: 0.55, metal: 0.6 },
+  fire: { roar: 0.3, crackle: 1, flare: 1, crash: 0.18, alarm: 0.3, lap: 0.15, people: 0.6 },
   train: { train: 1, wind: 0.15 },
-  light: { shimmer: 0.8, drips: 0.5, lap: 0.25 },
+  // After the deluge: grieving voices murmuring and sobbing, people wading.
+  light: { shimmer: 0.5, drips: 0.4, lap: 0.25, murmur: 0.6, sobs: 0.55, wade: 0.6 },
   none: {},
 };
+
+// Recorded voices for the soundscapes (made by tools/make_voices.py): how
+// many clips of each kind there are in audio/fx.
+const CLIPS = {
+  'burning-cry': 14,
+  'hannibal-shout': 10,
+  'hannibal-army': 3,
+  'slave-wail': 8,
+  'deluge-sob': 6,
+  'deluge-murmur': 3,
+};
+// Which clips each voice event plays.
+const VOICE_CLIPS = { cries: 'slave-wail', shouts: 'hannibal-shout', army: 'hannibal-army', people: 'burning-cry', sobs: 'deluge-sob', murmur: 'deluge-murmur' };
 const MOOD_SCAPE = { dawn: 'river', myth: 'sea', warm: 'harbour', tragic: 'tempest', storm: 'blizzard', fire: 'fire', speed: 'train', radiant: 'light' };
 
 // How often each event comes back, in seconds: [shortest, longest].
@@ -69,6 +87,14 @@ const EVERY = {
   crash: [6, 14],
   alarm: [22, 38],
   shimmer: [1.8, 4.5],
+  cries: [5, 12],
+  shouts: [4, 10],
+  army: [5.5, 7],
+  metal: [1.2, 4.5],
+  people: [2.5, 7],
+  sobs: [6, 13],
+  murmur: [6, 7.5],
+  wade: [7, 15],
 };
 
 export const BACKGROUND_TRACK = { url: 'audio/suspended-by-light.mp3', title: 'Suspended by Light' };
@@ -197,7 +223,7 @@ export class Ambient {
     this.fx.connect(send);
     send.connect(this.reverb);
     // Beds: looping noise, filtered, each with its own level.
-    const bed = (filters) => {
+    const bed = (filters, out = this.fx) => {
       const src = ctx.createBufferSource();
       src.buffer = this.noiseBuf;
       src.loop = true;
@@ -214,7 +240,7 @@ export class Ambient {
       const g = ctx.createGain();
       g.gain.value = 0;
       node.connect(g);
-      g.connect(this.fx);
+      g.connect(out);
       src.start(0, Math.random() * 3);
       return { gain: g, filters: nodes };
     };
@@ -228,6 +254,8 @@ export class Ambient {
       roar: bed([['lowpass', 520, 0.6], ['highpass', 90, 0.6]]),
       fireHiss: bed([['highpass', 2200, 0.5]]),
       water: bed([['lowpass', 620, 0.7], ['highpass', 110, 0.7]]),
+      // The deep, heaving roar of a heavy sea under the breakers.
+      seaRoar: bed([['lowpass', 170, 0.7]]),
     };
     // Flames flicker faster than any score: slow noise shakes the level of
     // the rumble and the roar several times a second.
@@ -253,6 +281,14 @@ export class Ambient {
     this.trainBus.gain.value = 0;
     this.trainPan = this.panner(0);
     this.trainBus.connect(this.trainPan);
+    // An old locomotive is never silent between its beats: the fire roaring
+    // in the box, steam leaking, the wheels rumbling on the rails.
+    this.trainBeds = {
+      boiler: bed([['lowpass', 260, 0.7]], this.trainBus),
+      leak: bed([['highpass', 4500, 0.5]], this.trainBus),
+      rails: bed([['lowpass', 95, 0.8]], this.trainBus),
+    };
+    this.clipCache = {};
     this.scape = null;
     this.scapeId = '';
     this.scene = null;
@@ -424,6 +460,8 @@ export class Ambient {
   // A tone with a quick attack and a long ring, for bells and drops.
   tone(at, hz, gain, decay, { type = 'sine', attack = 0.005, out = this.fx, toHz = 0, glide = 0.05 } = {}) {
     const { ctx } = this;
+    // Partials above what the output can carry are left out.
+    if (hz >= ctx.sampleRate * 0.45) return null;
     const o = ctx.createOscillator();
     o.type = type;
     o.frequency.setValueAtTime(hz, at);
@@ -457,7 +495,9 @@ export class Ambient {
       // Stagger the first events so a new painting does not open with all of
       // them at once.
       this.next = {};
-      for (const key of Object.keys(EVERY)) this.next[key] = now + rand(0.5, EVERY[key][0]);
+      for (const key of Object.keys(EVERY)) this.next[key] = now + rand(0.5, this.every(key)[0]);
+      // Load the recorded voices this soundscape uses.
+      for (const key of Object.keys(VOICE_CLIPS)) if (this.scape[key]) this.loadClips(VOICE_CLIPS[key]);
     }
     const sc = this.scape;
     const lv = clamp(scene.level ?? 0.8, 0, 1.5);
@@ -488,6 +528,8 @@ export class Ambient {
       set('roar', 0);
       set('fireHiss', 0);
     }
+    this.seaRoarLevel = (sc.seaRoar ?? 0) * (0.6 + 0.4 * clamp(scene.water ?? 0.5, 0, 1.5));
+    if (this.seaRoarLevel < 0.01) set('seaRoar', 0);
     this.updateTrain(scene.train, now);
   }
 
@@ -497,7 +539,7 @@ export class Ambient {
     const scene = this.scene;
     const due = (key) => {
       if (!sc[key] || now < this.next[key]) return false;
-      const [a, b] = EVERY[key];
+      const [a, b] = this.every(key);
       this.next[key] = now + rand(a, b);
       return true;
     };
@@ -540,8 +582,94 @@ export class Ambient {
     if (due('crash')) this.crash(at(), sc.crash);
     if (due('alarm')) this.alarm(at(), sc.alarm);
     if (due('shimmer')) this.shimmer(at(), sc.shimmer);
+    // A heavy sea heaves under everything.
+    if (this.seaRoarLevel > 0.01) {
+      this.beds.seaRoar.gain.gain.setTargetAtTime(this.seaRoarLevel * rand(0.35, 0.8), now, rand(0.6, 1.6));
+    }
+    for (const key of ['cries', 'shouts', 'army', 'people', 'sobs', 'murmur']) {
+      if (due(key)) this.playClip(VOICE_CLIPS[key], at(), sc[key], key === 'army' || key === 'murmur');
+    }
+    if (due('metal')) this.metal(at(), sc.metal);
+    if (due('wade')) this.wade(at(), sc.wade);
     if (sc.paddle) this.paddle(now, sc.paddle);
     if (sc.train) this.tickTrain(now, sc.train);
+  }
+
+  every(key) {
+    return this.scape?.every?.[key] ?? EVERY[key];
+  }
+
+  // ---- Recorded voices
+
+  loadClips(group) {
+    if (this.clipCache[group]) return;
+    const urls = Array.from({ length: CLIPS[group] }, (_, i) => `audio/fx/${group}-${String(i + 1).padStart(2, '0')}.mp3`);
+    this.clipCache[group] = { buffers: [], last: -1 };
+    for (const url of urls) {
+      fetch(url)
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${url}: ${r.status}`))))
+        .then((data) => this.ctx.decodeAudioData(data))
+        .then((buffer) => this.clipCache[group].buffers.push(buffer))
+        .catch((err) => console.warn(err));
+    }
+  }
+
+  // A voice from the scene: a little higher or lower each time, placed
+  // somewhere across the wall, in the room's reverb. A bed (the army, the
+  // murmuring crowd) plays wide and steady.
+  playClip(group, at, level, bed = false) {
+    const set = this.clipCache[group];
+    if (!set || !set.buffers.length) return;
+    let i = Math.floor(Math.random() * set.buffers.length);
+    if (i === set.last && set.buffers.length > 1) i = (i + 1) % set.buffers.length;
+    set.last = i;
+    const { ctx } = this;
+    const src = ctx.createBufferSource();
+    src.buffer = set.buffers[i];
+    src.playbackRate.value = rand(0.93, 1.07);
+    const g = ctx.createGain();
+    g.gain.value = (bed ? 0.35 : 0.5) * level;
+    src.connect(g);
+    g.connect(this.panner(bed ? rand(-0.3, 0.3) : rand(-0.8, 0.8)));
+    const send = ctx.createGain();
+    send.gain.value = 0.5;
+    g.connect(send);
+    send.connect(this.reverb);
+    src.start(at);
+  }
+
+  // Armour, chain and weapons on the march: small metallic strikes, now and
+  // then the long ring of a blade.
+  metal(at, level) {
+    const out = this.panner(rand(-0.7, 0.7));
+    const strikes = 1 + Math.floor(Math.random() * 5);
+    let t = at;
+    for (let k = 0; k < strikes; k++) {
+      const hz = rand(1700, 4200);
+      [[1, 1], [2.76, 0.5], [5.4, 0.25]].forEach(([m, a]) => this.tone(t, hz * m, 0.03 * level * a, rand(0.06, 0.25), { attack: 0.001, out }));
+      t += rand(0.05, 0.2);
+    }
+    if (Math.random() < 0.2) {
+      const hz = rand(650, 1050);
+      [[1, 1], [2.41, 0.6], [3.93, 0.4], [6.1, 0.2]].forEach(([m, a]) => this.tone(t + 0.1, hz * m, 0.035 * level * a, 1.4 / Math.sqrt(m), { attack: 0.002, out }));
+    }
+  }
+
+  // Someone wading through the flood: a few heavy steps, each a slosh and
+  // a swirl of water, passing slowly across the wall.
+  wade(at, level) {
+    const steps = 3 + Math.floor(Math.random() * 4);
+    const from = rand(-0.8, 0.8);
+    const to = clamp(from + rand(-0.6, 0.6), -0.9, 0.9);
+    for (let k = 0; k < steps; k++) {
+      const t = at + k * rand(0.7, 1.0);
+      const out = this.panner(from + ((to - from) * k) / steps);
+      const f = this.burst(t, rand(0.35, 0.55), 'bandpass', 500, 0.3 * level, { q: 0.9, attack: 0.06, out });
+      f.frequency.setValueAtTime(380, t);
+      f.frequency.exponentialRampToValueAtTime(1300, t + 0.25);
+      this.burst(t + 0.02, 0.18, 'lowpass', 300, 0.3 * level, { attack: 0.02, out });
+      for (let d = 0; d < 2; d++) this.drip(t + rand(0.2, 0.6), level * 0.5);
+    }
   }
 
   // Surf: a swell that rises, breaks and draws back hissing over the sand.
@@ -567,6 +695,13 @@ export class Ambient {
     g.connect(out);
     src.start(at, Math.random() * 3);
     src.stop(at + rise + fall + 1);
+    // A heavy sea breaks with a boom you feel, and a roar of white water.
+    if (size > 1) {
+      const big = size - 1;
+      this.tone(at + rise, rand(48, 60), 0.55 * big, 2.2, { toHz: 28, glide: 1.4, attack: 0.03, out });
+      this.burst(at + rise - 0.05, rand(1.4, 2.2), 'lowpass', 2600, 0.35 * big, { attack: 0.06, out });
+      this.burst(at + rise + 0.2, fall, 'bandpass', 900, 0.12 * big, { q: 0.5, attack: 0.3, out });
+    }
     // Foam drawing back.
     this.burst(at + rise + 0.15, fall * 0.7, 'highpass', 3200, 0.05 * size, { attack: 0.3, out });
   }
@@ -634,9 +769,9 @@ export class Ambient {
       this.tone(t, hz, 0.055 * level, len, { toHz: hz * (down ? 0.7 : 1.35), glide: len, out });
       t += len + rand(0.03, 0.1);
     }
-    if (Math.random() < 0.3) {
+    const o = Math.random() < 0.3 ? this.tone(t + 0.1, base * 1.1, 0.04 * level, 0.6, { attack: 0.05, out }) : null;
+    if (o) {
       const { ctx } = this;
-      const o = this.tone(t + 0.1, base * 1.1, 0.04 * level, 0.6, { attack: 0.05, out });
       const lfo = ctx.createOscillator();
       lfo.frequency.value = rand(22, 34);
       const lg = ctx.createGain();
@@ -856,6 +991,7 @@ export class Ambient {
       return;
     }
     if (!tr) {
+      for (const b of Object.values(this.trainBeds)) b.gain.gain.setTargetAtTime(0.06, now, 0.5);
       // A score with the train sound but no moving train: a steady chug
       // off to one side.
       st.prox = 0.35;
@@ -867,7 +1003,10 @@ export class Ambient {
     st.prox = prox;
     st.rate = 2.2 + 4.2 * prox;
     // The sound lingers a little as the train passes out of the picture.
-    this.trainBus.gain.setTargetAtTime(Math.sqrt(tr.alpha) * (0.35 + 0.65 * prox), now, 0.15);
+    this.trainBus.gain.setTargetAtTime(Math.sqrt(tr.alpha) * (0.5 + 0.8 * prox), now, 0.15);
+    this.trainBeds.boiler.gain.gain.setTargetAtTime(0.1 + 0.12 * prox, now, 0.3);
+    this.trainBeds.leak.gain.gain.setTargetAtTime(0.012 + 0.01 * prox, now, 0.3);
+    this.trainBeds.rails.gain.gain.setTargetAtTime(0.12 + 0.3 * prox, now, 0.3);
     if (this.trainPan.pan) this.trainPan.pan.setTargetAtTime(clamp((tr.x - 0.5) * 1.4, -0.85, 0.85), now, 0.2);
     if (tr.alpha < 0.05) {
       st.moving = false;
@@ -889,6 +1028,7 @@ export class Ambient {
     // Four exhausts to a turn of the driving wheels, the first strongest.
     while (st.nextChuff < now + 0.25) {
       this.chuff(st.nextChuff, st.beat % 4 === 0);
+      if (st.beat % 2 === 1) this.rods(st.nextChuff + 0.5 / st.rate);
       st.beat++;
       st.nextChuff += 1 / st.rate;
     }
@@ -900,10 +1040,22 @@ export class Ambient {
     }
   }
 
+  // One exhaust beat of an old engine: a hard blast of steam up the
+  // chimney with a thump of weight under it and a hiss trailing off.
   chuff(at, accent) {
     const out = this.trainBus;
-    this.burst(at, 0.13, 'bandpass', 420, accent ? 0.2 : 0.12, { q: 0.9, attack: 0.006, out });
-    this.burst(at, 0.2, 'highpass', 2200, accent ? 0.06 : 0.04, { attack: 0.01, out });
+    const k = accent ? 1.15 : 1;
+    this.burst(at, 0.18, 'bandpass', 650, 0.75 * k, { q: 0.6, attack: 0.004, out });
+    this.burst(at, 0.1, 'lowpass', 350, 0.55 * k, { attack: 0.003, out });
+    this.tone(at, 78, 0.3 * k, 0.13, { toHz: 48, glide: 0.1, attack: 0.003, out });
+    this.burst(at + 0.02, 0.32, 'highpass', 3200, 0.14 * k, { attack: 0.02, out });
+  }
+
+  // The coupling rods knocking at each turn of the wheels.
+  rods(at) {
+    const out = this.trainBus;
+    const hz = rand(1300, 1700);
+    [[1, 1], [2.3, 0.4]].forEach(([m, a]) => this.tone(at, hz * m, 0.03 * a, 0.05, { attack: 0.001, out }));
   }
 
   clack(at) {
