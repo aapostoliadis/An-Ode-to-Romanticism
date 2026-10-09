@@ -324,7 +324,7 @@ export function autoRecipe(analysis) {
     embers: stats.warmFraction > 0.08 ? 0.4 : 0,
     focusX: sun.x,
     focusY: sun.y,
-    zoom: 1.3,
+    zoom: 1.15,
     transition: 'brush',
     mood: fiery ? 'fire' : stats.meanLum > 0.55 ? 'dawn' : 'warm',
   };

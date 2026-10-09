@@ -328,20 +328,30 @@ void main() {
   // nearer layer is never seen twice when the planes slide apart.
   vec3 col = mix(texture(uSkyFill, pS).rgb, skyCol, smoothstep(0.45, 0.8, mS));
 
-  // Technique 3, water: perspective-correct ripples below the horizon.
+  // Technique 3, water, in perspective below the horizon: a swell of long,
+  // uneven waves rolling in toward the viewer, their crests catching the
+  // light and their troughs darker, with ripples running over them.
   vec2 pr = pW;
   float dy = pW.y - uHorizon;
+  float shade = 1.0;
   if (uWater > 0.0 && dy > 0.0) {
     float z = 0.05 / (dy + 0.02);
+    float near = smoothstep(0.0, 0.06, dy) * (0.4 + dy * 2.5);
+    float bend = vnoise(vec2(pW.x * 3.0, z * 2.0 + t * 0.05)) * 4.0;
+    float ph = z * 38.0 + t * 1.2 + bend;
+    float swell = sin(ph);
+    pr.y -= swell * uWater * 0.01 * near;
+    pr.x += cos(ph) * uWater * 0.003 * near / uAspect;
+    float crest = smoothstep(0.6, 1.0, swell);
+    shade = 1.0 + (swell * 0.08 + crest * 0.16) * uWater * min(near, 1.0);
     vec2 wp = vec2((pW.x - 0.5) * uAspect * z * 4.0, z * 3.0);
     vec2 rip = vec2(vnoise(wp * 1.7 + vec2(t * 0.25, -t * 0.6)),
                     vnoise(wp * 1.7 + vec2(7.1 - t * 0.2, 3.3 - t * 0.5))) - 0.5;
     rip += 0.5 * (vec2(vnoise(wp * 4.1 + vec2(-t * 0.4, t * 0.9)),
                        vnoise(wp * 4.3 + vec2(2.0, t * 0.8))) - 0.5);
-    float amp = uWater * 0.012 * smoothstep(0.0, 0.06, dy) * (0.4 + dy * 2.5);
-    pr += rip * amp * vec2(1.0 / uAspect, 0.5);
+    pr += rip * uWater * 0.016 * near * vec2(1.0 / uAspect, 0.5);
   }
-  vec3 waterCol = flowSample(pr, uFlow * 0.55, vec2(uSkyDir.x * uSkyDrift * 0.2, 0.0));
+  vec3 waterCol = flowSample(pr, uFlow * 0.55, vec2(uSkyDir.x * uSkyDrift * 0.2, 0.0)) * shade;
   vec4 mW = texture(uLayerMask, pW);
   // Below the horizon the water also runs on behind the land.
   float waterA = clamp(smoothstep(0.25, 0.6, mW.g) + uHasWater * mW.b * smoothstep(-0.01, 0.03, dy), 0.0, 1.0);

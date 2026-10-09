@@ -37,9 +37,8 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 const TRANSITION_SECONDS = { brush: 3.4, bleed: 3.8, light: 3.6, flow: 3.4, dark: 3, tiles: 3.6 };
 const REVEAL_SECONDS = 8;
 // Bumped when the shape of a score changes, so old saved edits do not hide
-// new defaults (v3: the train is rotoscoped and sets off from where it is
-// painted).
-const STORAGE_PREFIX = 'turner-lumieres:recipe:v3:';
+// new defaults (v4: a minimal camera push, stronger waves and ships).
+const STORAGE_PREFIX = 'turner-lumieres:recipe:v4:';
 
 let renderer;
 try {
@@ -345,19 +344,23 @@ function fitZoom() {
 }
 
 // Every painting opens fully zoomed out, the whole canvas in view, and holds
-// there through its title; then the camera eases in through filling the
-// screen to the painting's push, and draws back.
+// there through its title. The camera then moves in only a little (the
+// push, 0 to 0.5, is relative to that opening view) and draws back part of
+// the way: the life of the painting is in its own motion, not the camera.
 const OPEN_HOLD = 0.1;
+const MAX_PUSH = 1.5;
 function cameraAt(r, tau) {
   const u = showProgress(tau, r.duration);
-  const push = Math.max(1, reducedMotion ? 1 + (r.zoom - 1) * 0.3 : r.zoom);
+  const amount = clamp(r.zoom, 1, MAX_PUSH) - 1;
+  const push = 1 + (reducedMotion ? amount * 0.3 : amount);
+  const fit = fitZoom();
   if (u < 0.72) {
     const k = ease(clamp((u - OPEN_HOLD) / (0.72 - OPEN_HOLD), 0, 1));
-    return [lerp(fitZoom(), push, k), lerp(0.5, r.focusX, k), lerp(0.5, r.focusY, k)];
+    return [fit * lerp(1, push, k), lerp(0.5, r.focusX, k), lerp(0.5, r.focusY, k)];
   }
   const k = ease((u - 0.72) / 0.28);
-  const endZoom = 1 + (push - 1) * 0.55;
-  return [lerp(push, endZoom, k), lerp(r.focusX, lerp(0.5, r.focusX, 0.6), k), lerp(r.focusY, lerp(0.5, r.focusY, 0.6), k)];
+  const endPush = 1 + (push - 1) * 0.55;
+  return [fit * lerp(push, endPush, k), lerp(r.focusX, lerp(0.5, r.focusX, 0.6), k), lerp(r.focusY, lerp(0.5, r.focusY, 0.6), k)];
 }
 
 function targetView(tau) {
@@ -548,17 +551,16 @@ function layerViews(r, motion) {
   const v = state.view;
   if (state.editing) return { sky: v, water: v, land: v };
   const depth = clamp(r.parallax * motion, 0, 1.5);
-  const base = coverView(1, 0.5, 0.5);
-  // Zoomed out further than filling the screen, the planes stay together,
-  // so the whole painting is seen as painted; they separate as it pushes in.
-  if (v[2] >= base[2] - 1e-6 && v[3] >= base[3] - 1e-6) return { sky: v, water: v, land: v };
+  // The planes coincide in the fully zoomed-out opening view and separate
+  // as the camera moves in.
+  const base = coverView(fitZoom(), 0.5, 0.5);
   const look = [(state.mouseSmooth[0] - 0.5) * 0.03 * depth, (state.mouseSmooth[1] - 0.5) * 0.02 * depth];
-  // The look-around stays on the canvas: with no push there is no margin,
-  // so the planes only shift once the camera has pushed in.
+  // The look-around only uses room the painting has: along an edge where the
+  // whole canvas is already in view it does not move.
   const plane = (follow, lookGain) => {
     const out = v.map((x, i) => base[i] + (x - base[i]) * follow);
-    out[0] = clamp(out[0] + look[0] * lookGain, 0, Math.max(0, 1 - out[2]));
-    out[1] = clamp(out[1] + look[1] * lookGain, 0, Math.max(0, 1 - out[3]));
+    if (out[2] < 1) out[0] = clamp(out[0] + look[0] * lookGain, 0, 1 - out[2]);
+    if (out[3] < 1) out[1] = clamp(out[1] + look[1] * lookGain, 0, 1 - out[3]);
     return out;
   };
   return {

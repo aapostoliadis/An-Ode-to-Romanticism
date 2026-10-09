@@ -48,7 +48,7 @@ export const CONTROL_GROUPS = [
   {
     title: 'Water and air',
     items: [
-      { key: 'water', label: 'Water ripples', min: 0, max: 1.5, step: 0.01, hint: 'Ripples on the water below the horizon, stronger toward you.' },
+      { key: 'water', label: 'Waves and ripples', min: 0, max: 2, step: 0.01, hint: 'A swell rolling toward you across the water below the horizon, with its crests catching the light, and ripples over it, stronger toward you.' },
       { key: 'mist', label: 'Mist', min: 0, max: 1.2, step: 0.01, hint: 'Drifting mist, densest along the horizon.' },
       { key: 'smoke', label: 'Smoke or steam', min: 0, max: 1, step: 0.01, hint: 'A plume of smoke or steam rising from the smoke marker (≋) and bending with the wind.' },
       { key: 'smokeColor', label: 'Smoke colour', type: 'color', hint: 'Colour of the smoke or steam.' },
@@ -68,7 +68,7 @@ export const CONTROL_GROUPS = [
     title: 'Camera and show',
     items: [
       // Shown as the push itself: 0.00 is no push (the stored zoom is 1).
-      { key: 'zoom', label: 'Camera push', min: 1, max: 2.5, step: 0.01, shift: -1, hint: 'How far the camera moves in toward the focus marker (✛). Every painting opens fully zoomed out, then eases in to this amount; 0.00 stops where the painting fills the screen.' },
+      { key: 'zoom', label: 'Camera push', min: 1, max: 1.5, step: 0.01, shift: -1, hint: 'How far the camera moves in toward the focus marker (✛), from the fully zoomed-out opening view. 0.00 keeps the whole painting in view; 0.50 is the most.' },
       { key: 'duration', label: 'Time on the wall', min: 12, max: 120, step: 1, unit: 's', hint: 'Seconds on the wall before the show moves on to the next painting.' },
       { key: 'transition', label: 'Arrives with', type: 'select', options: TRANSITIONS, hint: 'How this painting arrives: brushstroke wipe, watercolour bleed, flood of light, paint flowing away, through darkness or mosaic tiles.' },
     ],

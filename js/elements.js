@@ -33,8 +33,8 @@ export const ELEMENT_TYPES = [
 // long it waits where it is painted before it sets off, in seconds.
 const TYPE_DEFAULTS = {
   approach: { period: 13, vx: 'auto', vy: 'auto', zNear: 0.25, delay: 3, phase: 0 },
-  drift: { dx: 0.04, dy: 0, bob: 0.003, rock: 0.008, period: 8, pivot: 0.6 },
-  rock: { dx: 0, dy: 0, bob: 0.004, rock: 0.03, period: 5, pivot: 0.8 },
+  drift: { dx: 0.05, dy: 0, bob: 0.005, rock: 0.015, period: 8, pivot: 0.6 },
+  rock: { dx: 0, dy: 0, bob: 0.008, rock: 0.05, period: 4.5, pivot: 0.8 },
   rise: { dx: 0, dy: -0.05, bob: 0, rock: 0, period: 10, pivot: 0 },
   pulse: { pulse: 0.06, period: 7 },
 };
@@ -780,10 +780,14 @@ export function elementState(el, time, progress, motion = 1) {
     };
   }
   const travel = el.type === 'rise' ? progress : progress - 0.5;
+  // A boat on a real sea: the main swell with a shorter cross sea over it,
+  // so the pitching and heaving never repeat exactly.
+  const heave = (Math.sin(time * w) + 0.3 * Math.sin(time * w * 1.73 + 2.1)) / 1.3;
+  const roll = (Math.sin(time * w * 0.9 + 1.3) + 0.35 * Math.sin(time * w * 2.17 + 0.4)) / 1.35;
   return {
-    offset: [travel * el.dx * amt, travel * el.dy * amt + Math.sin(time * w) * el.bob * amt],
+    offset: [travel * el.dx * amt, travel * el.dy * amt + heave * el.bob * amt],
     scale: 1,
-    rot: Math.sin(time * w * 0.9 + 1.3) * el.rock * amt,
+    rot: roll * el.rock * amt,
     alpha: 1,
     blur: [0, 0],
     pivot: [0, (el.pivot ?? 0) * el.ry],
