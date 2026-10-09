@@ -99,6 +99,41 @@ button.rec.active,
   color: #fff;
 }
 
+/* The speaker: sound waves when sound is on, a cross when it is off. */
+svg.snd {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+svg.snd .snd-body {
+  fill: currentColor;
+}
+
+#soundBtn .snd-off,
+#soundBtn[aria-pressed='false'] .snd-on {
+  display: none;
+}
+
+#soundBtn[aria-pressed='false'] .snd-off {
+  display: inline;
+}
+
+kbd.kicon {
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+}
+
+kbd.kicon svg.snd {
+  width: 15px;
+  height: 15px;
+}
+
 /* Sound is on but the browser is waiting for a first click. */
 .controls button.waiting {
   animation: waiting 1.6s ease-in-out infinite;
@@ -934,8 +969,15 @@ button.primary:hover {
   color: var(--ink-dim);
 }
 
-@media (max-width: 1100px) {
-  .brand-sub,
+/* "Choose your own music" is a long label: the subtitle gives way first,
+   then the button itself on narrower windows. */
+@media (max-width: 1320px) {
+  .brand-sub {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
   #musicBtn {
     display: none;
   }

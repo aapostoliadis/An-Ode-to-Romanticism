@@ -42,8 +42,14 @@
             <option value="auto">Transitions: as scored</option>
           </select>
         </label>
-        <button type="button" id="soundBtn" title="Music and sound effects (S)">Sound</button>
-        <button type="button" id="musicBtn" title="Play your own music in place of Suspended by Light, the light follows it">Music</button>
+        <button type="button" id="soundBtn" class="icon" title="Music and sound effects on or off (S)" aria-label="Sound">
+          <svg class="snd" viewBox="0 0 24 24" aria-hidden="true">
+            <path class="snd-body" d="M4 9.2h3.6L12.4 5v14l-4.8-4.2H4z" />
+            <path class="snd-on" d="M15.6 9.1a4.2 4.2 0 0 1 0 5.8M18.3 6.6a7.8 7.8 0 0 1 0 10.8" />
+            <path class="snd-off" d="M16 9.5l5 5M21 9.5l-5 5" />
+          </svg>
+        </button>
+        <button type="button" id="musicBtn" title="Play your own music in place of Suspended by Light, the light follows it">Choose your own music</button>
         <input id="musicInput" type="file" accept="audio/*" hidden />
         <button type="button" id="recordBtn" title="Record a video (R)">Record</button>
         <button type="button" id="snapBtn" class="icon" title="Save a still frame">◉</button>
@@ -161,10 +167,10 @@
               <dd>Pause or play the show. Paused, the painting stays on the wall and keeps moving, but the show does not move on.</dd>
               <dt>Transitions</dt>
               <dd>Leave it on "as scored" so each painting arrives its own way, or pick one transition for every painting: brushstroke wipe, watercolour bleed, flood of light, paint flowing away, through darkness or mosaic tiles.</dd>
-              <dt>Sound</dt>
-              <dd>Music and sound effects are on from the start. Browsers only let a page play sound after a first click or key press, so the music begins with your first click anywhere; until then the button pulses. Turning sound off is remembered for your next visit.</dd>
-              <dt>Music</dt>
-              <dd>Plays an audio file of your own in place of Suspended by Light. The light then pulses with your track.</dd>
+              <dt><kbd class="kicon"><svg class="snd" viewBox="0 0 24 24" aria-hidden="true"><path class="snd-body" d="M4 9.2h3.6L12.4 5v14l-4.8-4.2H4z" /><path class="snd-on" d="M15.6 9.1a4.2 4.2 0 0 1 0 5.8M18.3 6.6a7.8 7.8 0 0 1 0 10.8" /></svg></kbd> Sound</dt>
+              <dd>The speaker turns the music and sound effects on or off (or press S). They are on from the start: the speaker shows sound waves, and a cross when sound is off. Browsers only let a page play sound after a first click or key press, so the music begins with your first click anywhere; until then the speaker pulses. Turning sound off is remembered for your next visit.</dd>
+              <dt>Choose your own music</dt>
+              <dd>Opens a file picker so you can play an audio file of your own in place of Suspended by Light. The light then pulses with your track, and sound is turned on if it was off. On narrow screens this button is hidden.</dd>
               <dt>Record</dt>
               <dd>Records a video of the show; press Stop to save it. See Saving.</dd>
               <dt><kbd>◉</kbd></dt>
@@ -284,7 +290,7 @@
             <p>
               The music, Suspended by Light, starts with your first click or key press and loops through the whole show without
               a break: each time round, the end crossfades into the beginning.
-              <strong>Sound</strong> turns it on or off. Under it each
+              The speaker in the top bar turns it on or off. Under it each
               painting has its own sound effects: surf, gulls and creaking timber for Ulysses, the river and birdsong at Norham,
               the tug's engine and a ship's bell for the Temeraire, a fearsome sea with booming, crashing waves and cries for help
               on the Slave Ship, the roaring storm around the steam-boat, wind, thunder, soldiers' voices in no real language and
@@ -296,7 +302,7 @@
               The effects follow the sliders: more rain, snow or fire in the editor means more of it in the sound. In the editor's
               Sound group, <strong>Mood</strong> sets the character of the painting, <strong>Sound effects</strong> picks a different
               soundscape (or "No effects"), and <strong>Effects level</strong> sets how loud they are under the music.
-              <strong>Music</strong> in the top bar plays your own track instead of Suspended by Light.
+              <strong>Choose your own music</strong> in the top bar plays your own track instead of Suspended by Light.
             </p>
           </section>
 
