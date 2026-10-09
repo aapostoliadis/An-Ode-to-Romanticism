@@ -237,7 +237,7 @@ const MOTIFS = {
     ctx.translate(x, y);
     ctx.rotate(a);
     ctx.fillStyle = rgba(m.color, 0.95);
-    ctx.fillRect(-s * 1.5, -s * 0.35, s * 2.3, s * 0.6);
+    ctx.fillRect(-s * 0.65, -s * 0.35, s * 1.45, s * 0.6);
     ctx.fillRect(s * 0.5, -s * 0.45, s * 0.45, s * 0.8);
     ctx.restore();
     // The chimney stays upright, at the front.

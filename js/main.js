@@ -37,8 +37,9 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 const TRANSITION_SECONDS = { brush: 3.4, bleed: 3.8, light: 3.6, flow: 3.4, dark: 3, tiles: 3.6 };
 const REVEAL_SECONDS = 8;
 // Bumped when the shape of a score changes, so old saved edits do not hide
-// new defaults (v2: the train sets off from where it is painted).
-const STORAGE_PREFIX = 'turner-lumieres:recipe:v2:';
+// new defaults (v3: the train is rotoscoped and sets off from where it is
+// painted).
+const STORAGE_PREFIX = 'turner-lumieres:recipe:v3:';
 
 let renderer;
 try {

@@ -494,7 +494,10 @@ export const PAINTINGS = [
       // The locomotive, its chimney and its lamps, lying along the viaduct.
       // It sets off from where Turner painted it and runs down the line,
       // diagonally toward the viewer, coming from the point where the
-      // viaduct vanishes into the rain behind it.
+      // viaduct vanishes into the rain behind it. The engine is painted in
+      // the same dark tones as the viaduct under it, so a colour cut would
+      // leave its front behind; it is rotoscoped instead, with an outline
+      // traced around the boiler, chimney, lamps and buffer beam.
       elements: [
         {
           type: 'approach',
@@ -503,6 +506,12 @@ export const PAINTINGS = [
           rx: 0.116,
           ry: 0.089,
           angle: 24,
+          shape: [
+            [-0.727, 0.569], [-0.718, 0.311], [-0.628, 0.099], [-0.464, -0.116], [-0.214, -0.365], [0.014, -0.575],
+            [0.154, -0.662], [0.135, -0.789], [0.25, -0.878], [0.302, -0.722], [0.4, -0.657], [0.5, -0.483],
+            [0.639, -0.285], [0.772, -0.082], [0.855, 0.268], [0.823, 0.512], [0.602, 0.749], [0.353, 0.877],
+            [0.156, 0.889], [0.022, 0.61], [-0.191, 0.71], [-0.459, 0.885], [-0.629, 0.854],
+          ],
           vx: 0.505,
           vy: 0.526,
           zNear: 0.25,

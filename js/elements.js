@@ -6,7 +6,8 @@
 //   1. snap      find the element near a hinted position (darkest or
 //                brightest mass), so a score survives different crops
 //   2. matte     a soft silhouette inside an ellipse: pixels that differ
-//                from the ring of background around the element
+//                from the ring of background around the element, or, when
+//                the score draws one, a hand-traced outline (a rotoscope)
 //   3. fill      repaint the hole: a push-pull smooth fill, blended with a
 //                directional fill that carries lines (a bridge, the
 //                horizon) straight across the gap
@@ -59,8 +60,16 @@ export function makeElement(partial = {}) {
 
 // Switching type keeps the region and swaps in that type's motion.
 export function retypeElement(el, type) {
-  const { x, y, rx, ry, angle, matte, amount, smoke, light } = el;
-  return makeElement({ x, y, rx, ry, angle, matte, amount, smoke, light, type });
+  const { x, y, rx, ry, angle, matte, amount, smoke, light, shape } = el;
+  return makeElement({ x, y, rx, ry, angle, matte, amount, smoke, light, shape, type });
+}
+
+// An outline is a list of [along, across] points in the element's own
+// frame: the unit circle is its (tilted) ellipse.
+function sanitizeShape(shape) {
+  if (!Array.isArray(shape) || shape.length < 3 || shape.length > 96) return null;
+  const pts = shape.filter((p) => Array.isArray(p) && p.length === 2 && p.every((v) => typeof v === 'number' && Number.isFinite(v)));
+  return pts.length === shape.length ? pts.map(([a, b]) => [clamp(a, -1.6, 1.6), clamp(b, -1.6, 1.6)]) : null;
 }
 
 // Validates elements coming from storage or an imported score.
@@ -76,6 +85,8 @@ export function sanitizeElements(list) {
     if (MATTES.includes(raw.matte)) el.matte = raw.matte;
     el.smoke = raw.smoke === true;
     el.light = raw.light === true;
+    const shape = sanitizeShape(raw.shape);
+    if (shape) el.shape = shape;
     out.push(makeElement(el));
   }
   return out;
@@ -186,7 +197,10 @@ export function resolveElements(recipe, analysis) {
 
 export function elementsKey(elements) {
   return JSON.stringify(
-    elements.map((e) => [e.x, e.y, e.rx, e.ry, e.angle ?? 0, e.matte].map((v) => (typeof v === 'number' ? v.toFixed(4) : v))),
+    elements.map((e) => [
+      ...[e.x, e.y, e.rx, e.ry, e.angle ?? 0, e.matte].map((v) => (typeof v === 'number' ? v.toFixed(4) : v)),
+      e.shape ?? null,
+    ]),
   );
 }
 
@@ -315,6 +329,8 @@ function computeMatte(data, b) {
   const sa = Math.sin(b.angle ?? 0);
   const ell = new Float32Array(n);
   const ang = new Float32Array(n);
+  const lx = new Float32Array(n);
+  const ly = new Float32Array(n);
   const lum = new Float32Array(n);
   const ring = Array.from({ length: SECTORS }, () => []);
   const ringLum = [];
@@ -327,6 +343,8 @@ function computeMatte(data, b) {
       const ey = (oy * ca - ox * sa) / b.ry;
       const d = Math.sqrt(ex * ex + ey * ey);
       ell[k] = d;
+      lx[k] = ex;
+      ly[k] = ey;
       ang[k] = Math.atan2(ey, ex);
       lum[k] = (0.299 * data[k * 4] + 0.587 * data[k * 4 + 1] + 0.114 * data[k * 4 + 2]) / 255;
       if (d > 1.08 && d < 1.38) {
@@ -336,6 +354,7 @@ function computeMatte(data, b) {
       }
     }
   }
+  if (b.shape) return shapeMatte(b, ell, lx, ly);
   ringLum.sort((p, q) => p - q);
   const bgLum = ringLum.length ? ringLum[ringLum.length >> 1] : 0.5;
   const palettes = ring.map((list) => {
@@ -388,6 +407,35 @@ function computeMatte(data, b) {
   for (let k = 0; k < n; k++) {
     hole[k] = Math.max(matte[k], Math.min(1, spread[k] * 3) * (1 - smoothstep(1.05, 1.25, ell[k])));
   }
+  return { matte, hole };
+}
+
+// A traced outline: everything inside it is the element, with a soft edge
+// a couple of pixels wide. The hole to repaint reaches a little further, so
+// no rim of the object is left painted on the background.
+function insidePolygon(px, py, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function shapeMatte(b, ell, lx, ly) {
+  const { bw, bh } = b;
+  const n = bw * bh;
+  let matte = new Float32Array(n);
+  for (let k = 0; k < n; k++) {
+    if (ell[k] < 1.8 && insidePolygon(lx[k], ly[k], b.shape)) matte[k] = 1;
+  }
+  const r1 = Math.max(1, Math.round(Math.min(bw, bh) / 150));
+  matte = boxBlur(boxBlur(matte, bw, bh, r1), bw, bh, r1);
+  const r2 = Math.max(2, Math.round(Math.min(bw, bh) / 40));
+  const spread = boxBlur(boxBlur(matte, bw, bh, r2), bw, bh, r2);
+  const hole = new Float32Array(n);
+  for (let k = 0; k < n; k++) hole[k] = Math.max(matte[k], Math.min(1, spread[k] * 4));
   return { matte, hole };
 }
 
@@ -477,6 +525,43 @@ function fillHole(data, hole, bw, bh, seed) {
     return null;
   };
 
+  // Texture for the repaint: the brushwork just above or below the hole,
+  // mirrored across its edge, laid over the smooth fill, so the empty
+  // place reads as paint rather than a flat smudge.
+  const rd = Math.max(2, Math.round(Math.min(bw, bh) / 50));
+  const base = [0, 1, 2].map((c) => {
+    const ch = new Float32Array(n);
+    for (let k = 0; k < n; k++) ch[k] = rgb[k * 3 + c];
+    return boxBlur(boxBlur(ch, bw, bh, rd), bw, bh, rd);
+  });
+  const upGap = new Int32Array(n).fill(-1);
+  const downGap = new Int32Array(n).fill(-1);
+  for (let x = 0; x < bw; x++) {
+    let last = -1;
+    for (let y = 0; y < bh; y++) {
+      const k = y * bw + x;
+      if (known[k] > 0.92) last = y;
+      else if (last >= 0) upGap[k] = y - last;
+    }
+    last = -1;
+    for (let y = bh - 1; y >= 0; y--) {
+      const k = y * bw + x;
+      if (known[k] > 0.92) last = y;
+      else if (last >= 0) downGap[k] = last - y;
+    }
+  }
+  const detailAt = (x, y) => {
+    const k = y * bw + x;
+    const up = upGap[k];
+    const down = downGap[k];
+    if (up < 0 && down < 0) return null;
+    const sy = up >= 0 && (down < 0 || up <= down) ? y - 2 * up : y + 2 * down;
+    if (sy < 0 || sy >= bh) return null;
+    const j = sy * bw + x;
+    if (known[j] < 0.9) return null;
+    return [rgb[j * 3] - base[0][j], rgb[j * 3 + 1] - base[1][j], rgb[j * 3 + 2] - base[2][j]];
+  };
+
   let rnd = seed >>> 0;
   const noise = () => {
     rnd = (Math.imul(rnd, 1664525) + 1013904223) >>> 0;
@@ -523,6 +608,12 @@ function fillHole(data, hole, bw, bh, seed) {
           g += (dg - g) * k2;
           b += (db - b) * k2;
         }
+      }
+      const detail = detailAt(x, y);
+      if (detail) {
+        r += detail[0] * 0.85;
+        g += detail[1] * 0.85;
+        b += detail[2] * 0.85;
       }
       const grain = noise() * 7;
       data[k * 4] = data[k * 4] * (1 - h) + (r + grain) * h;
@@ -604,12 +695,13 @@ export function cutElements(source, elements) {
     // Half extents of the tilted ellipse, with room for the ring around it.
     const hx = Math.hypot(rx * Math.cos(angle), ry * Math.sin(angle));
     const hy = Math.hypot(rx * Math.sin(angle), ry * Math.cos(angle));
-    const m = 1.42;
+    const reach = el.shape ? Math.max(1, ...el.shape.map(([a, b]) => Math.hypot(a, b))) : 1;
+    const m = 1.42 * reach;
     const bx = clamp(Math.floor(el.x * W - hx * m), 0, W - 2);
     const by = clamp(Math.floor(el.y * H - hy * m), 0, H - 2);
     const bx1 = clamp(Math.ceil(el.x * W + hx * m), bx + 2, W);
     const by1 = clamp(Math.ceil(el.y * H + hy * m), by + 2, H);
-    return { bx, by, bw: bx1 - bx, bh: by1 - by, cx: el.x * W, cy: el.y * H, rx, ry, angle, matte: el.matte };
+    return { bx, by, bw: bx1 - bx, bh: by1 - by, cx: el.x * W, cy: el.y * H, rx, ry, angle, matte: el.matte, shape: el.shape };
   });
   const originals = boxes.map((b) => ctx.getImageData(b.bx, b.by, b.bw, b.bh));
   const pieces = boxes.map((b, i) => {

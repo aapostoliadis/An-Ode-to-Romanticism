@@ -32,7 +32,7 @@ export const SOUNDSCAPES = [
   { id: 'tempest', label: 'Storm at sea, thunder' },
   { id: 'blizzard', label: 'Snow storm, paddle steamer' },
   { id: 'alps', label: 'Mountain storm, horns' },
-  { id: 'fire', label: 'Great fire, bells' },
+  { id: 'fire', label: 'Raging fire, bells' },
   { id: 'train', label: 'Steam train in the rain' },
   { id: 'light', label: 'Light, water and glass' },
   { id: 'none', label: 'No effects' },
@@ -45,7 +45,7 @@ const SCAPES = {
   tempest: { waves: 1, wind: 0.6, thunder: 0.6, creak: 0.5 },
   blizzard: { wind: 1, waves: 0.65, paddle: 0.4, shipBell: 0.35 },
   alps: { wind: 0.9, thunder: 0.8, horn: 0.5 },
-  fire: { roar: 1, crackle: 1, crash: 0.6, alarm: 0.5, lap: 0.2 },
+  fire: { roar: 1, crackle: 1.4, flare: 1, crash: 0.8, alarm: 0.45, lap: 0.15 },
   train: { train: 1, wind: 0.15 },
   light: { shimmer: 0.8, drips: 0.5, lap: 0.25 },
   none: {},
@@ -63,7 +63,8 @@ const EVERY = {
   creak: [2.5, 7],
   shipBell: [16, 32],
   horn: [18, 36],
-  crash: [8, 20],
+  flare: [1.4, 3.6],
+  crash: [6, 14],
   alarm: [22, 38],
   shimmer: [1.8, 4.5],
 };
@@ -182,9 +183,32 @@ export class Ambient {
       rainLow: bed([['lowpass', 500, 0.6]]),
       windLow: bed([['bandpass', 420, 6]]),
       windHigh: bed([['bandpass', 1100, 3]]),
-      roar: bed([['lowpass', 340, 0.8]]),
+      // A blaze in three bands: the deep rumble, the roaring body, the hiss.
+      fireLow: bed([['lowpass', 150, 0.9]]),
+      roar: bed([['lowpass', 520, 0.6], ['highpass', 90, 0.6]]),
+      fireHiss: bed([['highpass', 2200, 0.5]]),
       water: bed([['lowpass', 620, 0.7], ['highpass', 110, 0.7]]),
     };
+    // Flames flicker faster than any score: slow noise shakes the level of
+    // the rumble and the roar several times a second.
+    const flicker = ctx.createBufferSource();
+    flicker.buffer = this.noiseBuf;
+    flicker.loop = true;
+    let fl = flicker;
+    for (let i = 0; i < 2; i++) {
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 9;
+      f.Q.value = 0.5;
+      fl.connect(f);
+      fl = f;
+    }
+    this.flickerDepth = ctx.createGain();
+    this.flickerDepth.gain.value = 0;
+    fl.connect(this.flickerDepth);
+    this.flickerDepth.connect(this.beds.roar.gain.gain);
+    this.flickerDepth.connect(this.beds.fireLow.gain.gain);
+    flicker.start(0, Math.random() * 3);
     this.trainBus = ctx.createGain();
     this.trainBus.gain.value = 0;
     this.trainPan = this.panner(0);
@@ -404,9 +428,14 @@ export class Ambient {
     }
     this.waterLevel = (sc.lap ?? 0) * (0.6 + 0.4 * clamp(scene.water ?? 0.4, 0, 1));
     if (this.waterLevel < 0.01) set('water', 0);
-    const roar = clamp(scene.fire ?? 0, 0, 1.2) * (sc.roar ? 1 : 0.5);
+    const roar = clamp(scene.fire ?? 0, 0, 1.2) * (sc.roar ? 1.2 : 0.5);
     this.roarLevel = roar;
-    if (roar < 0.01) set('roar', 0);
+    this.flickerDepth.gain.setTargetAtTime(roar * 14, now, 0.3);
+    if (roar < 0.01) {
+      set('fireLow', 0);
+      set('roar', 0);
+      set('fireHiss', 0);
+    }
     this.updateTrain(scene.train, now);
   }
 
@@ -435,12 +464,17 @@ export class Ambient {
     if (this.waterLevel > 0.01) {
       this.beds.water.gain.gain.setTargetAtTime(this.waterLevel * rand(0.12, 0.26), now, rand(0.3, 0.9));
     }
-    // Fire: the roar flutters, embers crack.
+    // Fire: the blaze surges and falls back, timber spits and pops.
     if (this.roarLevel > 0.01) {
-      this.beds.roar.gain.gain.setTargetAtTime(this.roarLevel * rand(0.1, 0.2), now, 0.15);
-      this.beds.roar.filters[0].frequency.setTargetAtTime(rand(240, 480), now, 0.2);
-      const n = Math.round(this.roarLevel * 4 * (sc.crackle ?? 0.5));
-      for (let k = 0; k < n; k++) if (Math.random() < 0.6) this.crackle(now + rand(0, 0.2));
+      const lv = this.roarLevel;
+      this.beds.fireLow.gain.gain.setTargetAtTime(lv * rand(0.4, 0.7), now, 0.12);
+      this.beds.roar.gain.gain.setTargetAtTime(lv * rand(0.2, 0.36), now, 0.1);
+      this.beds.roar.filters[0].frequency.setTargetAtTime(rand(380, 900), now, 0.15);
+      this.beds.fireHiss.gain.gain.setTargetAtTime(lv * rand(0.025, 0.06), now, 0.2);
+      const n = Math.round(lv * 6 * (sc.crackle ?? 0.5));
+      for (let k = 0; k < n; k++) if (Math.random() < 0.7) this.crackle(now + rand(0, 0.2), lv);
+      if (Math.random() < lv * 0.35) this.pop(now + rand(0, 0.2), lv);
+      if (due('flare')) this.flare(at(), lv * sc.flare);
     }
     if (due('waves')) this.wave(at(), sc.waves * (0.6 + 0.4 * Math.min(1, water)));
     if (due('lap')) this.lap(at(), sc.lap);
@@ -667,15 +701,46 @@ export class Ambient {
     }
   }
 
-  // Timbers giving way in the fire: a low boom, a rush, a spray of sparks.
+  // Timbers giving way in the fire: a heavy boom, a rush of flame, a spray
+  // of sparks.
   crash(at, level) {
-    this.tone(at, 75, 0.3 * level, 1.2, { toHz: 34, glide: 0.7, attack: 0.01 });
-    this.burst(at, 1.6, 'lowpass', 1400, 0.12 * level, { attack: 0.02 });
-    for (let k = 0; k < 12; k++) this.crackle(at + rand(0.05, 1.6));
+    this.tone(at, 70, 0.6 * level, 1.6, { toHz: 30, glide: 0.9, attack: 0.008 });
+    this.burst(at, 0.5, 'lowpass', 2400, 0.4 * level, { attack: 0.005 });
+    this.burst(at + 0.05, 2.2, 'lowpass', 900, 0.35 * level, { attack: 0.15 });
+    for (let k = 0; k < 24; k++) this.crackle(at + rand(0.05, 2), 1.2);
   }
 
-  crackle(at) {
-    this.burst(at, 0.02 + Math.random() * 0.04, 'highpass', 2500 + Math.random() * 3000, 0.05 + Math.random() * 0.08, { attack: 0.002, out: this.fx });
+  // A surge of flame: the blaze draws breath and flares up.
+  flare(at, level) {
+    const { ctx } = this;
+    const rise = rand(0.4, 0.9);
+    const fall = rand(1, 2);
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(160, at);
+    f.frequency.exponentialRampToValueAtTime(rand(900, 1700), at + rise);
+    f.frequency.exponentialRampToValueAtTime(220, at + rise + fall);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.5 * level, at + rise);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + rise + fall);
+    src.connect(f);
+    f.connect(g);
+    g.connect(this.panner(rand(-0.5, 0.5)));
+    src.start(at, Math.random() * 3);
+    src.stop(at + rise + fall + 0.1);
+  }
+
+  crackle(at, level = 1) {
+    this.burst(at, rand(0.015, 0.06), 'highpass', rand(1800, 5000), rand(0.1, 0.3) * level, { attack: 0.002, out: this.fx });
+  }
+
+  // A knot of sap bursting: a short, hard snap.
+  pop(at, level) {
+    this.burst(at, rand(0.01, 0.025), 'bandpass', rand(600, 1500), rand(0.5, 0.9) * level, { q: 2.5, attack: 0.001, out: this.panner(rand(-0.6, 0.6)) });
   }
 
   // Far horns echoing in the mountains.

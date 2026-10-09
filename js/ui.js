@@ -289,6 +289,15 @@ export class Handles {
       outline.style.width = `${bx - ax}px`;
       outline.style.height = `${by - ay}px`;
       outline.style.transform = `translate(-50%, -50%) rotate(${el.angle ?? 0}deg)`;
+      // A traced outline is drawn as it is cut; otherwise the ellipse.
+      outline.classList.toggle('traced', !!el.shape);
+      const key = el.shape ? JSON.stringify(el.shape) : '';
+      if (outline.dataset.shape !== key) {
+        outline.dataset.shape = key;
+        outline.innerHTML = el.shape
+          ? `<svg viewBox="-1 -1 2 2" preserveAspectRatio="none"><polygon points="${el.shape.map((p) => p.join(',')).join(' ')}" /></svg>`
+          : '';
+      }
     });
   }
 }
