@@ -33,7 +33,7 @@ Watching how a still painting becomes forty seconds of moving image, the product
 
 **Motion comes from the brushwork itself.** The famous effect of the Starry Night show is that the sky swirls in the direction Van Gogh painted it. The paint moves along its own strokes rather than as a rigid image, which is why it feels painted rather than animated.
 
-**Depth without 3D.** Elements are separated into planes (sky, sea, boats, figures) and drift at different speeds as a slow virtual camera pushes in. This 2.5D parallax gives depth and keeps the painted surface intact.
+**The painting is broken into layers.** Each work is separated into planes (skies, water, foliage and ground, figures, the texture of the brushwork) so each part can move on its own: clouds shift gently, water ripples, light drifts, paint swirls. The planes follow the slow virtual camera at slightly different speeds, and that parallax suggests depth on a flat canvas. The motion stays faithful to the painter's hand rather than turning the work into something else.
 
 **Elements are cut out and set moving.** Boats glide or pitch on the swell, a sun rises, a train runs toward the visitors. A studio rotoscopes each object, repaints the background behind it and animates the cut-out as its own layer, often with a perspective scale so it seems to come out of the wall.
 
@@ -54,12 +54,14 @@ Each painting carries a "score" (a recipe of parameters) that a single fragment 
 | Show technique | How it is done here | Where |
 | --- | --- | --- |
 | Paint flows along its strokes | Structure tensor of the image gives stroke direction and coherence; a guide field (wind plus an optional spiral vortex) is projected onto the stroke direction, and the paint is advected with a two-phase looping flow map. The projection `d · dot(d, g)` is immune to the 180° ambiguity of a stroke. | `analysis.js`, `flowAt` in `shaders.js` |
-| 2.5D depth | A pseudo depth map from aerial perspective (bright, hazy and high is far; dark, contrasty and low is near) displaces pixels as the camera and pointer move. | `analysis.js`, scene shader |
+| Layer separation | Sky, water and land are separated per painting: the sky is modelled row by row from the colours above the horizon (Turner's skies change with height), the water from the calm, horizontally stroked band below it, and whatever neither explains is land. Land above the horizon has to stand on the ground or the water, so a storm cloud stays in the sky and a ship or a castle does not. Each layer is continued behind the others with a push-pull fill. The editor can show the layers as a tint. | `layers.js` |
+| Layer motion | Clouds drift with the wind and swirl along their strokes (fine detail such as rigging is held still), water ripples in perspective, foliage stirs in gusts, the brush texture is separated from the colour masses and nudged along each stroke, and soft passes of light drift across land and water. | scene shader |
+| Parallax between layers | Each plane follows the camera by its own amount: the sky least, the water more, the land and figures fully, plus a small look-around with the pointer. Where the separation is unsure the far layer shows only its soft fill, so nothing is seen twice when the planes slide apart. | `layerViews` in `main.js`, scene shader |
 | Slow camera | A long push toward the focal point (by default the light source), then an easing pull back. | `cameraAt` in `main.js` |
 | Water | Perspective-correct ripples below the horizon, stronger toward the viewer. | scene shader |
 | Mist, smoke, steam | Domain-warped noise tinted by a heavily blurred mip of the painting, densest at the horizon; a plume rises from a point and bends with the wind. | scene shader |
 | Fire | Warm bright areas flicker and glow; embers rise above them. | scene shader |
-| Rain and snow | Procedural streaks at an angle; snow and spray on rigidly rotating rings around the vortex so the swirl never shears into noise. | scene shader |
+| Rain and snow | Procedural streaks at an angle; snow falls from top to bottom at three depths (near flakes larger and faster), swaying a little and slanting with the wind. | scene shader |
 | Light | Breathing glow and god rays marched toward the light through a blurred bright pass, screen-blended so highlights never clip flat. | scene shader |
 | Painting paints itself | Two-stage reveal along a line-integral-convolution stroke map: colour washes first, then the strokes, spreading out from the light. | `analysis.js`, scene shader |
 | Transitions | Brushstroke wipe, watercolour bleed, flood of light, paint flowing away, through darkness, mosaic tiles. The outgoing frame is frozen into a texture and dissolved over the live new painting. | `transition` in `shaders.js` |
@@ -87,7 +89,7 @@ Each painting carries a "score" (a recipe of parameters) that a single fragment 
 
 Pick a painting in the gallery, or press **Your painting** to drop in any image file or paste an image address. The program analyses it and writes a starting score, finding the light source and horizon and switching fire on for warm, bright images.
 
-Press **Edit** to shape it. The painting is fitted beside the panel with markers for the light (outer ring), the vortex, the camera focus (inner dot), the smoke source and the horizon line; drag them into place. The sliders cover stroke flow, wind, vortex, glow, rays, water, mist, smoke, rain, snow, fire, embers, camera push, parallax, time on the wall, the entrance transition and the score. Edits are saved in the browser for that painting, and **Export** and **Import** move a score between machines as JSON.
+Press **Edit** to shape it. The painting is fitted beside the panel with markers for the light (outer ring), the vortex, the camera focus (inner dot), the smoke source and the horizon line; drag them into place. The sliders cover stroke flow, wind, vortex, the layers (clouds drift, foliage stirs, brush texture, drifting light, depth between layers), glow, rays, water, mist, smoke, rain, snow, fire, embers, camera push, time on the wall, the entrance transition and the score. **Show the layers** tints the sky blue, the water teal and the land green; dragging the horizon re-separates them. Edits are saved in the browser for that painting, and **Export** and **Import** move a score between machines as JSON.
 
 Under **Moving elements**, press **Add moving element**, drag its numbered marker onto an object and choose how it moves: comes toward the viewer, drifts across, rocks on the waves, rises or sets, or pulses. The dashed outline is the area that is cut; the **Size** slider fits it to the object and **Motion** sets how much it moves. An element that comes toward the viewer gets a second marker (⊙) for the point it comes from. Compact objects that stand out from their surroundings (a dark boat on bright water, a sun in haze) cut best; an object painted in the same colours as what surrounds it moves only partly.
 
@@ -95,7 +97,7 @@ Under **Moving elements**, press **Add moving element**, drag its numbered marke
 
 ## Files
 
-`index.html` and `styles.css` hold the page. In `js/`, `main.js` runs the show (loading, sequencing, camera, titles, input), `paintings.js` is the catalogue and the scores, `analysis.js` measures strokes, depth, light and horizon, `elements.js` cuts out and animates the moving elements, `loader.js` fetches images and paints the offline studies, `shaders.js` contains every GLSL pass, `renderer.js` drives WebGL2, `audio.js` is the generative score, `recorder.js` exports video and stills, and `ui.js` builds the gallery, editor and markers.
+`index.html` and `styles.css` hold the page. In `js/`, `main.js` runs the show (loading, sequencing, camera, titles, input), `paintings.js` is the catalogue and the scores, `analysis.js` measures strokes, depth, light and horizon, `layers.js` separates sky, water and land, `elements.js` cuts out and animates the moving elements, `loader.js` fetches images and paints the offline studies, `shaders.js` contains every GLSL pass, `renderer.js` drives WebGL2, `audio.js` is the generative score, `recorder.js` exports video and stills, and `ui.js` builds the gallery, editor and markers.
 
 ## Notes and limits
 

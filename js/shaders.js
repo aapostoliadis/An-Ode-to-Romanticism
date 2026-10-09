@@ -81,7 +81,6 @@ uniform sampler2D uPrevFrame;
 uniform vec2 uRes;
 uniform float uTime;
 uniform vec4 uView;
-uniform vec2 uParallax;
 uniform float uAspect;
 uniform float uFlow;
 uniform float uFlowSpeed;
@@ -109,6 +108,18 @@ uniform float uReveal;
 uniform float uTrans;
 uniform int uTransType;
 uniform vec3 uCanvas;
+uniform sampler2D uLayerMask;
+uniform sampler2D uSkyFill;
+uniform sampler2D uWaterFill;
+uniform vec4 uViewSky;
+uniform vec4 uViewWater;
+uniform vec2 uSkyDir;
+uniform float uSkyDrift;
+uniform float uLandSway;
+uniform float uLightDrift;
+uniform float uBrush;
+uniform float uHasWater;
+uniform float uShowLayers;
 uniform sampler2D uLayer0;
 uniform sampler2D uLayer1;
 uniform sampler2D uLayer2;
@@ -183,34 +194,19 @@ float rainLayer(vec2 q, float scale, float speed, float seed) {
   return on * (1.0 - smoothstep(0.0, 0.05, x)) * smoothstep(0.0, 0.1, y) * (1.0 - smoothstep(0.2, 0.7, y));
 }
 
-// Snow and spray caught in the vortex: particles live on rings that each
-// rotate rigidly, so the swirl never shears into noise over time.
-float vortexFlakes(vec2 si, vec2 c, float scale, float seed) {
-  vec2 d = si - c;
-  float r = length(d) * scale;
-  float ring = floor(r);
-  float rr = fract(r);
-  float circ = max(6.0, floor(6.2831 * (ring + 0.5)));
-  float omega = uVortex.z * (0.35 + 0.9 / (ring / scale + 0.2)) * (0.8 + 0.4 * hash12(vec2(ring, seed)));
-  float aa = (atan(d.y, d.x) / 6.2831 + 0.5 + uTime * omega * 0.02) * circ;
-  float id = mod(floor(aa), circ);
-  float fa = fract(aa);
-  vec2 key = vec2(id, ring) + seed;
-  vec2 o = hash22(key) * 0.6 + 0.2;
-  vec2 lp = vec2((fa - o.x) * 6.2831 * (ring + 0.5) / circ, rr - o.y);
-  float sz = 0.06 + 0.09 * hash12(key * 1.7);
-  return step(0.55, hash12(key * 3.3)) * (1.0 - smoothstep(sz * 0.2, sz, length(lp)));
-}
-
-float driftFlakes(vec2 si, float scale, float seed) {
+// Snow falls straight down, swaying a little and slanting with the wind.
+// Three depths: near flakes are larger and faster than far ones.
+float snowLayer(vec2 si, float scale, float speed, float seed) {
   vec2 q = si * scale;
-  q -= (uWind * 0.6 + vec2(0.0, 0.35)) * uTime * scale * 0.15;
-  q.x += sin(q.y * 0.5 + seed) * 0.3;
+  q.y -= uTime * speed;
+  q.x -= uTime * speed * (uSkyDir.x * 0.15 + uWind.x * 0.5);
   vec2 id = floor(q);
   vec2 f = fract(q);
-  vec2 o = hash22(id + seed * 2.0) * 0.6 + 0.2;
+  float h = hash12(id + seed);
+  vec2 o = hash22(id + seed * 2.0) * 0.5 + 0.25;
+  o.x += sin(uTime * (0.7 + h * 0.6) + h * 6.2831) * 0.15;
   float sz = 0.045 + 0.075 * hash12(id * 1.3 + seed);
-  return step(0.5, hash12(id + seed)) * (1.0 - smoothstep(sz * 0.2, sz, length(f - o)));
+  return step(0.5, h) * (1.0 - smoothstep(sz * 0.2, sz, length(f - o)));
 }
 
 float sparks(vec2 q, float scale, float seed) {
@@ -224,6 +220,21 @@ float sparks(vec2 q, float scale, float seed) {
   float sz = 0.03 + 0.05 * hash12(id * 2.1 + seed);
   float flicker = 0.5 + 0.5 * sin(uTime * (6.0 + h * 8.0) + h * 40.0);
   return step(0.6, h) * (1.0 - smoothstep(0.0, sz, length(f - o))) * flicker;
+}
+
+// Flow-map advection: two phases half a cycle apart, cross-faded so the
+// reset of one phase is always hidden. The per-pixel phase comes from the
+// stroke map, so neighbouring strokes breathe out of step. bias adds a
+// steady drift (clouds carried by the wind) on top of the stroke flow.
+vec3 flowSample(vec2 p, float amount, vec2 bias) {
+  vec4 ana = texture(uAna, p);
+  vec2 f = flowAt(p, ana) * amount + bias;
+  float ph = uTime * uFlowSpeed + ana.a * 0.6;
+  float ph0 = fract(ph);
+  float ph1 = fract(ph + 0.5);
+  float w0 = 1.0 - abs(1.0 - 2.0 * ph0);
+  vec2 off = fromIso(f) * 0.045;
+  return texture(uPaint, p - off * (ph0 - 0.5)).rgb * w0 + texture(uPaint, p - off * (ph1 - 0.5)).rgb * (1.0 - w0);
 }
 
 vec3 transition(vec3 cur, vec2 s, vec2 p, float lic) {
@@ -292,45 +303,62 @@ vec3 transition(vec3 cur, vec2 s, vec2 p, float lic) {
 
 void main() {
   vec2 s = vec2(vUv.x, 1.0 - vUv.y);
-  vec2 p = uView.xy + s * uView.zw;
   float t = uTime;
 
   // Visitor interaction: the pointer stirs the wet paint.
   vec2 disp = texture(uDisp, vUv).xy;
-  p -= disp * uView.zw;
 
-  // Technique 2, 2.5D parallax: pixels slide by their pseudo depth when the
-  // camera or pointer moves, which separates planes without cut-out layers.
+  // Technique 2, layers in depth. Each plane has its own view of the
+  // painting: when the camera glides, the far sky moves least and the land
+  // most, so the planes slide apart like cut-outs in a toy theatre.
+  vec2 p = uView.xy + (s - disp) * uView.zw;
+  vec2 pS = uViewSky.xy + (s - disp) * uViewSky.zw;
+  vec2 pW = uViewWater.xy + (s - disp) * uViewWater.zw;
   float depth = texture(uDepth, p).r;
-  p += (depth - 0.5) * uParallax;
+
+  // Sky: clouds drift with the wind and swirl along their own strokes. The
+  // sky fill continues it behind every other layer.
+  // Fine, contrasty detail in the sky (rigging, a distant mast) is held
+  // still so the drift does not smear it.
+  float detail = abs(luma(texture(uPaint, pS).rgb) - luma(textureLod(uPaint, pS, 3.0).rgb));
+  float hold = 1.0 - smoothstep(0.05, 0.16, detail) * 0.85;
+  vec3 skyCol = flowSample(pS, uFlow * 1.1 * hold, uSkyDir * uSkyDrift * 1.2 * hold);
+  float mS = texture(uLayerMask, pS).r;
+  // Where the separation is unsure the sky shows only its soft fill, so the
+  // nearer layer is never seen twice when the planes slide apart.
+  vec3 col = mix(texture(uSkyFill, pS).rgb, skyCol, smoothstep(0.45, 0.8, mS));
 
   // Technique 3, water: perspective-correct ripples below the horizon.
-  float dy = p.y - uHorizon;
-  float below = smoothstep(-0.01, 0.05, dy);
+  vec2 pr = pW;
+  float dy = pW.y - uHorizon;
   if (uWater > 0.0 && dy > 0.0) {
     float z = 0.05 / (dy + 0.02);
-    vec2 wp = vec2((p.x - 0.5) * uAspect * z * 4.0, z * 3.0);
+    vec2 wp = vec2((pW.x - 0.5) * uAspect * z * 4.0, z * 3.0);
     vec2 rip = vec2(vnoise(wp * 1.7 + vec2(t * 0.25, -t * 0.6)),
                     vnoise(wp * 1.7 + vec2(7.1 - t * 0.2, 3.3 - t * 0.5))) - 0.5;
     rip += 0.5 * (vec2(vnoise(wp * 4.1 + vec2(-t * 0.4, t * 0.9)),
                        vnoise(wp * 4.3 + vec2(2.0, t * 0.8))) - 0.5);
     float amp = uWater * 0.012 * smoothstep(0.0, 0.06, dy) * (0.4 + dy * 2.5);
-    p += rip * amp * vec2(1.0 / uAspect, 0.5);
+    pr += rip * amp * vec2(1.0 / uAspect, 0.5);
   }
+  vec3 waterCol = flowSample(pr, uFlow * 0.55, vec2(uSkyDir.x * uSkyDrift * 0.2, 0.0));
+  vec4 mW = texture(uLayerMask, pW);
+  // Below the horizon the water also runs on behind the land.
+  float waterA = clamp(smoothstep(0.25, 0.6, mW.g) + uHasWater * mW.b * smoothstep(-0.01, 0.03, dy), 0.0, 1.0);
+  vec3 waterLayer = mix(texture(uWaterFill, pW).rgb, waterCol, smoothstep(0.45, 0.8, mW.g));
+  col = mix(col, waterLayer, waterA);
 
-  // Flow-map advection: two phases half a cycle apart, cross-faded so the
-  // reset of one phase is always hidden. The per-pixel phase comes from the
-  // stroke map, so neighbouring strokes breathe out of step.
+  // Land: banks, cliffs, bridges and foliage, the nearest plane. Foliage
+  // stirs in small gusts; the paint barely flows.
+  vec4 mL = texture(uLayerMask, p);
+  float gust = vnoise(vec2(p.x * 6.0 - t * 0.25, t * 0.15)) * 2.0 - 1.0;
+  vec2 sway = vec2(sin(t * 1.3 + p.x * 40.0 + p.y * 25.0) * 0.5 + gust, 0.0) * uLandSway * 0.0016;
+  vec3 landCol = flowSample(p + sway, uFlow * 0.3, vec2(0.0));
+  col = mix(col, landCol, smoothstep(0.25, 0.55, mL.b));
+
   vec4 ana = texture(uAna, p);
-  vec2 f = flowAt(p, ana);
-  float ph = t * uFlowSpeed + ana.a * 0.6;
-  float ph0 = fract(ph);
-  float ph1 = fract(ph + 0.5);
-  float w0 = 1.0 - abs(1.0 - 2.0 * ph0);
-  vec2 off = fromIso(f) * uFlow * mix(1.0, 0.55, below) * 0.045;
-  vec3 col = texture(uPaint, p - off * (ph0 - 0.5)).rgb * w0
-           + texture(uPaint, p - off * (ph1 - 0.5)).rgb * (1.0 - w0);
 
+  // Figures: cut-out moving elements, in front of the land.
   if (uElemCount > 0) {
     vec4 e = elementColor(uLayer0, uElemSrc[0], uElemRef[0], uElemXf[0], uElemBlur[0], p);
     col = mix(col, e.rgb, e.a);
@@ -345,6 +373,30 @@ void main() {
   }
 
   vec2 q = toIso(p);
+
+  // Texture: the brushwork itself, separated from the colour masses (a
+  // high-pass of the paint) and nudged along each stroke out of step with
+  // its neighbours, so the surface lives without the image moving.
+  if (uBrush > 0.0) {
+    float a2 = 0.5 * atan(ana.g * 2.0 - 1.0, ana.r * 2.0 - 1.0);
+    vec2 o = fromIso(vec2(cos(a2), sin(a2))) * sin(t * 0.5 + ana.a * 6.2831) * 0.0035 * uBrush;
+    vec3 moved = texture(uPaint, p + o).rgb - textureLod(uPaint, p + o, 2.5).rgb;
+    vec3 still = texture(uPaint, p).rgb - textureLod(uPaint, p, 2.5).rgb;
+    col += (moved - still) * 0.9;
+  }
+
+  // Drifting light: soft passes of light and shade travel across the scene
+  // with the wind, strongest on land and water.
+  if (uLightDrift > 0.0) {
+    vec2 lq = q * 1.4 + uSkyDir * t * 0.025;
+    float lp = fbm3(lq + vec2(fbm3(lq * 0.7 + t * 0.01), 0.0));
+    col *= 1.0 + (lp - 0.5) * 0.4 * uLightDrift * (1.0 - 0.5 * mS);
+  }
+
+  if (uShowLayers > 0.5) {
+    vec3 tint = mL.r * vec3(0.35, 0.55, 1.0) + mL.g * vec3(0.1, 0.85, 0.8) + mL.b * vec3(0.6, 0.85, 0.2);
+    col = mix(col, tint, 0.5);
+  }
 
   // Technique 4, atmosphere: domain-warped mist tinted with the local
   // colour of the painting (a very blurred mip level), densest at the horizon.
@@ -407,7 +459,7 @@ void main() {
     col = screen(col, acc / 24.0 * uRays * 3.2 * breathe * flick);
   }
 
-  // Technique 6, procedural elements: rain, snow in the vortex, embers.
+  // Technique 6, procedural elements: rain, falling snow, embers.
   float sa = uRes.x / uRes.y;
   vec2 si = vec2(s.x * sa, s.y);
   if (uRain > 0.0) {
@@ -416,15 +468,8 @@ void main() {
     col = mix(col, textureLod(uPaint, p, 5.0).rgb * 1.25 + 0.15, clamp(r * uRain, 0.0, 0.8));
   }
   if (uSnow > 0.0) {
-    float fl;
-    if (uVortex.z > 0.05) {
-      vec2 vc = (uVortex.xy - uView.xy) / uView.zw;
-      vc.x *= sa;
-      fl = vortexFlakes(si, vc, 11.0, 1.0) * 0.9 + vortexFlakes(si, vc, 19.0, 2.0) * 0.6
-         + vortexFlakes(si, vc, 32.0, 3.0) * 0.4;
-    } else {
-      fl = driftFlakes(si, 11.0, 1.0) * 0.9 + driftFlakes(si, 19.0, 2.0) * 0.6 + driftFlakes(si, 32.0, 3.0) * 0.4;
-    }
+    float fl = snowLayer(si, 11.0, 1.6, 1.0) * 0.9 + snowLayer(si, 19.0, 2.0, 2.0) * 0.6
+             + snowLayer(si, 32.0, 2.4, 3.0) * 0.4;
     vec3 flakeCol = mix(vec3(0.93, 0.91, 0.86), textureLod(uPaint, p, 5.0).rgb * 1.4, 0.3);
     col = mix(col, flakeCol, clamp(fl * uSnow, 0.0, 0.85));
   }

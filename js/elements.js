@@ -174,7 +174,7 @@ export function elementsKey(elements) {
 // ---------------------------------------------------------------------------
 // Cutting
 
-function pushPull(val, wgt, w, h, nc) {
+export function pushPull(val, wgt, w, h, nc) {
   const levels = [{ w, h, val, wgt }];
   while (levels[levels.length - 1].w > 1 || levels[levels.length - 1].h > 1) {
     const L = levels[levels.length - 1];

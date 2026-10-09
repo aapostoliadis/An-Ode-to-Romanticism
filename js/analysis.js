@@ -290,6 +290,8 @@ export function analysePainting(source) {
     stats: { meanLum, warmFraction: warmCount / N },
     aspect: sw / sh,
     lum: lb,
+    px,
+    energy: Float32Array.from(sxx, (v, i) => Math.min(1, (v + syy[i]) / (meanEnergy * 3))),
   };
 }
 

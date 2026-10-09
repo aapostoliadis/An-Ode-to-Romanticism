@@ -25,6 +25,16 @@ export const CONTROL_GROUPS = [
     ],
   },
   {
+    title: 'Layers',
+    items: [
+      { key: 'skyDrift', label: 'Clouds drift', min: 0, max: 1.5, step: 0.01 },
+      { key: 'landSway', label: 'Foliage stirs', min: 0, max: 1.5, step: 0.01 },
+      { key: 'brush', label: 'Brush texture lives', min: 0, max: 1.2, step: 0.01 },
+      { key: 'lightDrift', label: 'Drifting light', min: 0, max: 1.2, step: 0.01 },
+      { key: 'parallax', label: 'Depth between layers', min: 0, max: 1.5, step: 0.01 },
+    ],
+  },
+  {
     title: 'Light',
     items: [
       { key: 'sunColor', label: 'Light colour', type: 'color' },
@@ -57,7 +67,6 @@ export const CONTROL_GROUPS = [
     title: 'Camera and show',
     items: [
       { key: 'zoom', label: 'Camera push', min: 1, max: 2.5, step: 0.01 },
-      { key: 'parallax', label: 'Parallax depth', min: 0, max: 1.5, step: 0.01 },
       { key: 'duration', label: 'Time on the wall', min: 12, max: 120, step: 1, unit: 's' },
       { key: 'transition', label: 'Arrives with', type: 'select', options: TRANSITIONS },
       { key: 'mood', label: 'Score', type: 'select', options: MOOD_OPTIONS },

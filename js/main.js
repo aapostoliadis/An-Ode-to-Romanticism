@@ -1,5 +1,6 @@
 import { analysePainting, autoRecipe, resolveRecipe } from './analysis.js';
 import { Ambient } from './audio.js';
+import { segmentLayers } from './layers.js';
 import {
   ELEMENT_TYPES,
   MAX_ELEMENTS,
@@ -80,6 +81,7 @@ const state = {
   pending: null,
   advancing: false,
   snapshot: false,
+  showLayers: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -126,9 +128,11 @@ function prepare(entry) {
       }
     }
     const prepared = { entry, source, analysis: analysePainting(source), isStudy };
-    // Cut the moving elements now, ahead of the transition, so the switch
-    // itself does not stall.
-    cutFor(source, buildRecipe(prepared).elements);
+    // Separate the layers and cut the moving elements now, ahead of the
+    // transition, so the switch itself does not stall.
+    const recipe = buildRecipe(prepared);
+    layersFor(prepared.analysis, recipe);
+    cutFor(source, recipe.elements);
     return prepared;
   })();
   state.prepared.set(entry.id, job);
@@ -178,6 +182,10 @@ function pickKnown(obj) {
     if (Array.isArray(def)) {
       const list = sanitizeElements(v);
       if (list) out[key] = list;
+      continue;
+    }
+    if (typeof def === 'boolean') {
+      if (typeof v === 'boolean') out[key] = v;
       continue;
     }
     const numeric = typeof def === 'number' || def === 'auto' || def === 'sun';
@@ -241,6 +249,7 @@ function applyPainting(index, prepared) {
   const cut = cutFor(prepared.source, recipe.elements);
   renderer.setPainting(cut ? cut.plate : prepared.source, prepared.analysis);
   renderer.setLayers(cut ? cut.pieces : []);
+  renderer.setLayerMaps(layersFor(prepared.analysis, recipe));
   state.current = { ...prepared, recipe };
   state.index = index;
   state.paintTime = 0;
@@ -274,6 +283,25 @@ function cutFor(source, elements) {
   const cut = cutElements(source, elements);
   cutCache.set(source, { key, cut });
   return cut;
+}
+
+// Layer separation depends on the horizon and on whether there is water.
+const layerCache = new WeakMap();
+function layersFor(analysis, recipe) {
+  const key = `${recipe.horizon.toFixed(3)}:${recipe.water > 0.05}:${recipe.landAbove}`;
+  const hit = layerCache.get(analysis);
+  if (hit?.key === key) return hit.seg;
+  const seg = segmentLayers(analysis, { horizon: recipe.horizon, water: recipe.water, landAbove: recipe.landAbove });
+  layerCache.set(analysis, { key, seg });
+  return seg;
+}
+
+let relayerTimer = 0;
+function scheduleRelayer() {
+  clearTimeout(relayerTimer);
+  relayerTimer = setTimeout(() => {
+    renderer.setLayerMaps(layersFor(state.current.analysis, state.current.recipe));
+  }, 150);
 }
 
 let recutTimer = 0;
@@ -317,10 +345,14 @@ function cameraAt(r, tau) {
 }
 
 function targetView(tau) {
-  const sa = renderer.sceneAspect;
   const pa = state.current.analysis.aspect;
   if (state.editing) return editorView(pa);
-  const [zoom, cx, cy] = cameraAt(state.current.recipe, tau);
+  return coverView(...cameraAt(state.current.recipe, tau));
+}
+
+function coverView(zoom, cx, cy) {
+  const sa = renderer.sceneAspect;
+  const pa = state.current.analysis.aspect;
   let w = 1;
   let h = 1;
   if (sa > pa) h = pa / sa;
@@ -452,20 +484,12 @@ function frame(now) {
     const motion = reducedMotion ? 0.4 : 1;
     const viewTarget = targetView(state.paintTime);
     const k = state.editing || state.trans < 1 ? 1 - Math.exp(-dt * 5) : 1 - Math.exp(-dt * 2.5);
-    const prevView = state.view;
     state.view = state.view.map((v, i) => lerp(v, viewTarget[i], k));
-    const vel = [(state.view[0] - prevView[0]) / Math.max(dt, 1e-3), (state.view[1] - prevView[1]) / Math.max(dt, 1e-3)];
     state.mouseSmooth = state.mouseSmooth.map((v, i) => {
       const m = state.mouse[i] < -1 ? 0.5 : state.mouse[i];
       return lerp(v, m, 1 - Math.exp(-dt * 2));
     });
-    const par = r.parallax * motion * (state.editing ? 0 : 1);
-    // Camera velocity is clamped so large view changes (leaving the editor,
-    // resizing) do not tear the planes apart.
-    const parallax = [
-      ((state.mouseSmooth[0] - 0.5) * 0.02 + clamp(vel[0], -0.012, 0.012)) * par,
-      ((state.mouseSmooth[1] - 0.5) * 0.014 + clamp(vel[1], -0.012, 0.012)) * par,
-    ];
+    const views = layerViews(r, motion);
     if (state.mode === 'room' && performance.now() - state.lastLookInput > 5000) {
       state.look[0] = lerp(state.look[0], Math.sin(state.time * 0.045) * 0.9, 1 - Math.exp(-dt * 0.5));
     }
@@ -473,10 +497,12 @@ function frame(now) {
     renderer.render({
       recipe,
       elements,
+      viewSky: views.sky,
+      viewWater: views.water,
+      showLayers: state.showLayers,
       smokeScale,
       time: state.time,
-      view: state.view,
-      parallax,
+      view: views.land,
       mouse: state.mouse,
       mouseVel: state.mouseVel,
       audio: ambient.sample(),
@@ -499,6 +525,28 @@ function frame(now) {
     adaptQuality(dt);
   }
   requestAnimationFrame(frame);
+}
+
+// Each plane follows the camera by its own amount: the sky, furthest away,
+// moves least as the camera pushes in and pans; the water a little more;
+// the land and figures fully. The pointer adds a small sideways look.
+function layerViews(r, motion) {
+  const v = state.view;
+  if (state.editing) return { sky: v, water: v, land: v };
+  const depth = clamp(r.parallax * motion, 0, 1.5);
+  const base = coverView(1.04, 0.5, 0.5);
+  const look = [(state.mouseSmooth[0] - 0.5) * 0.03 * depth, (state.mouseSmooth[1] - 0.5) * 0.02 * depth];
+  const plane = (follow, lookGain) => {
+    const out = v.map((x, i) => base[i] + (x - base[i]) * follow);
+    out[0] += look[0] * lookGain;
+    out[1] += look[1] * lookGain;
+    return out;
+  };
+  return {
+    sky: plane(Math.max(0.4, 1 - 0.35 * depth), 0.2),
+    water: plane(Math.max(0.6, 1 - 0.18 * depth), 0.55),
+    land: plane(1, 1),
+  };
 }
 
 // Per-frame element transforms. Smoke attached to an element rides with it,
@@ -733,6 +781,7 @@ const editor = buildEditor($('editorGroups'), (key, value) => {
   if (!state.current) return;
   state.current.recipe[key] = value;
   if (key === 'mood') ambient.setMood(value);
+  if (key === 'water') scheduleRelayer();
   saveRecipe();
 });
 const handles = new Handles(
@@ -757,6 +806,7 @@ const handles = new Handles(
       el.vy = py;
     } else if (name === 'horizon') {
       r.horizon = py;
+      scheduleRelayer();
     } else {
       const keys = { sun: ['sunX', 'sunY'], vortex: ['vortexX', 'vortexY'], focus: ['focusX', 'focusY'], smoke: ['smokeX', 'smokeY'] };
       r[keys[name][0]] = px;
@@ -830,12 +880,19 @@ function setEditing(v) {
   if (v && state.mode === 'room') setMode('flat');
   state.editing = v;
   editorEl.hidden = !v;
+  if (!v) {
+    state.showLayers = false;
+    $('showLayers').checked = false;
+  }
   handles.visible = v;
   $('editBtn').classList.toggle('active', v);
   if (v && state.current) refreshEditor();
   wake();
 }
 $('editBtn').addEventListener('click', () => setEditing(!state.editing));
+$('showLayers').addEventListener('change', (e) => {
+  state.showLayers = e.target.checked;
+});
 $('editorClose').addEventListener('click', () => setEditing(false));
 
 $('resetRecipe').addEventListener('click', () => {
@@ -847,6 +904,7 @@ $('resetRecipe').addEventListener('click', () => {
   state.current.recipe = baseRecipe(state.current);
   refreshEditor();
   scheduleRecut();
+  scheduleRelayer();
   status('Animation reset to its original score.');
 });
 $('reanalyse').addEventListener('click', () => {
@@ -876,6 +934,7 @@ $('importInput').addEventListener('change', async (e) => {
     completeElements(state.current.recipe, state.current.analysis);
     refreshEditor();
     scheduleRecut();
+    scheduleRelayer();
     saveRecipe();
     ambient.setMood(state.current.recipe.mood);
     status(`Score applied to ${state.current.entry.title}.`);

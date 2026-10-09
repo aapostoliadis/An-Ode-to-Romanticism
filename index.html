@@ -64,7 +64,8 @@
         </div>
         <button type="button" id="editorClose" class="icon" title="Close editor">×</button>
       </div>
-      <p class="hint">Drag the markers on the painting to place the light, vortex, horizon, camera focus and smoke.</p>
+      <p class="hint">Drag the markers on the painting to place the light, vortex, horizon, camera focus and smoke. The horizon also divides sky from water and land.</p>
+      <label class="toggle"><input id="showLayers" type="checkbox" /> Show the layers (sky blue, water teal, land green)</label>
       <div id="editorGroups"></div>
       <section class="group elements-group">
         <h3>Moving elements</h3>
@@ -127,10 +128,11 @@
         </p>
         <ol class="techniques">
           <li><strong>Strokes that move.</strong> The direction of every brushstroke is measured from the image, and the paint is advected along it with a looping flow map, so skies and seas churn the way Turner painted them.</li>
-          <li><strong>Depth without cut-outs.</strong> A pseudo depth map from aerial perspective drives 2.5D parallax as the camera glides and the pointer moves.</li>
+          <li><strong>Layers.</strong> Each painting is separated into sky, water and land, with figures cut out and the brush texture lifted off the colour. Clouds drift, water ripples, foliage stirs, light drifts and the paint swirls, each layer on its own.</li>
+          <li><strong>Depth.</strong> The layers follow the camera at slightly different speeds, sky least and land most, so the flat canvas opens up in depth.</li>
           <li><strong>Slow camera.</strong> Each painting gets a long push toward its focal point and an easing pull back.</li>
           <li><strong>Moving elements.</strong> Objects are cut out of the painting, the background behind them is repainted, and they move: the train runs along the viaduct toward you, boats pitch on the swell, suns rise and set.</li>
-          <li><strong>Living atmosphere.</strong> Water ripples below the horizon, mist drifts, smoke and steam rise, fire flickers, embers, rain and snow fall or spiral in the vortex.</li>
+          <li><strong>Living atmosphere.</strong> Mist drifts, smoke and steam rise, fire flickers, embers rise, rain slants and snow falls.</li>
           <li><strong>Light.</strong> A breathing glow and god rays from the light source, pulsing with the music.</li>
           <li><strong>The painting paints itself.</strong> Colour washes first, then the strokes, spreading out from the light.</li>
           <li><strong>Transitions.</strong> Brushstroke wipes, watercolour bleeds, floods of light, melting paint, mosaics.</li>

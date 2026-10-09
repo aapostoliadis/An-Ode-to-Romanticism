@@ -231,6 +231,16 @@ export class Renderer {
     }));
   }
 
+  // Sky, water and land masks plus each layer continued behind the others.
+  setLayerMaps(seg) {
+    const gl = this.gl;
+    for (const t of [this.layerMask, this.skyFill, this.waterFill]) if (t) gl.deleteTexture(t);
+    this.layerMask = this.createTexture(seg.width, seg.height, { data: seg.masks });
+    this.skyFill = this.createTexture(seg.width, seg.height, { data: seg.skyFill });
+    this.waterFill = this.createTexture(seg.width, seg.height, { data: seg.waterFill });
+    this.hasWater = seg.hasWater;
+  }
+
   setPainting(source, analysis) {
     const gl = this.gl;
     for (const t of [this.ana, this.depth]) if (t) gl.deleteTexture(t);
@@ -315,7 +325,11 @@ export class Renderer {
       xf.set([e.offset[0], e.offset[1], Math.max(0.02, e.scale), e.rot], i * 4);
       blur.set([e.blur[0], e.blur[1], e.pivot?.[0] ?? 0, e.pivot?.[1] ?? 0], i * 4);
     }
+    this.bind(8, this.layerMask);
+    this.bind(9, this.skyFill);
+    this.bind(10, this.waterFill);
     const windRad = (r.windAngle * Math.PI) / 180;
+    const skyDir = [Math.cos(windRad) < -0.05 ? -1 : 1, 0];
     this.draw(this.programs.scene, this.scene, {
       uPaint: 0,
       uAna: 1,
@@ -325,7 +339,18 @@ export class Renderer {
       uRes: this.sceneSize,
       uTime: st.time,
       uView: st.view,
-      uParallax: st.parallax,
+      uViewSky: st.viewSky ?? st.view,
+      uViewWater: st.viewWater ?? st.view,
+      uLayerMask: 8,
+      uSkyFill: 9,
+      uWaterFill: 10,
+      uSkyDir: skyDir,
+      uSkyDrift: r.skyDrift,
+      uLandSway: r.landSway,
+      uLightDrift: r.lightDrift,
+      uBrush: r.brush,
+      uHasWater: this.hasWater ? 1 : 0,
+      uShowLayers: st.showLayers ? 1 : 0,
       uAspect: this.paintAspect,
       uFlow: r.flow,
       uFlowSpeed: r.flowSpeed,
