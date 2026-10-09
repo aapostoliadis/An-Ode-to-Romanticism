@@ -1,4 +1,4 @@
-import { COPY_FRAG, DISP_FRAG, PRESENT_FRAG, ROOM_FRAG, SCENE_FRAG, VERT } from './shaders.js';
+import { COPY_FRAG, DISP_FRAG, PRESENT_FRAG, SCENE_FRAG, VERT } from './shaders.js';
 
 const TRANSITION_IDS = ['brush', 'bleed', 'light', 'flow', 'dark', 'tiles'];
 
@@ -85,7 +85,6 @@ export class Renderer {
       scene: makeProgram(gl, SCENE_FRAG),
       disp: makeProgram(gl, DISP_FRAG),
       present: makeProgram(gl, PRESENT_FRAG),
-      room: makeProgram(gl, ROOM_FRAG),
       copy: makeProgram(gl, COPY_FRAG),
     };
 
@@ -146,9 +145,8 @@ export class Renderer {
     this.gl.deleteFramebuffer(t.fbo);
   }
 
-  // Scene buffers follow the display, except in the quarry view where the
-  // frame is a 2:1 panorama wrapped around the hall.
-  resize(cssW, cssH, dpr, quality, mode) {
+  // Scene buffers follow the display.
+  resize(cssW, cssH, dpr, quality) {
     const gl = this.gl;
     const w = Math.max(1, Math.round(cssW * dpr));
     const h = Math.max(1, Math.round(cssH * dpr));
@@ -156,16 +154,9 @@ export class Renderer {
       this.canvas.width = w;
       this.canvas.height = h;
     }
-    let sw;
-    let sh;
-    if (mode === 'room') {
-      sw = Math.round(2048 * quality);
-      sh = Math.round(1024 * quality);
-    } else {
-      const cap = Math.min(1, 2560 / (w * quality));
-      sw = Math.max(2, Math.round(w * quality * cap));
-      sh = Math.max(2, Math.round(h * quality * cap));
-    }
+    const cap = Math.min(1, 2560 / (w * quality));
+    const sw = Math.max(2, Math.round(w * quality * cap));
+    const sh = Math.max(2, Math.round(h * quality * cap));
     if (sw !== this.sceneSize[0] || sh !== this.sceneSize[1]) {
       // Keep the frozen frame, a transition may be running.
       const oldPrev = this.prev;
@@ -388,7 +379,7 @@ export class Renderer {
       uElemBlur: blur,
     });
 
-    // 3. Present: flat projection or the quarry hall.
+    // 3. Present.
     this.bind(0, this.scene.tex);
     this.bind(1, this.text);
     const common = {
@@ -399,15 +390,6 @@ export class Renderer {
       uRes: [this.canvas.width, this.canvas.height],
       uTime: st.time,
     };
-    if (st.mode === 'room') {
-      this.draw(this.programs.room, null, {
-        ...common,
-        uLook: st.look,
-        uEye: [0, 1.7, 3.5],
-        uFov: st.fov,
-      });
-    } else {
-      this.draw(this.programs.present, null, { ...common, uVignette: 0.55, uGrain: 0.025 });
-    }
+    this.draw(this.programs.present, null, { ...common, uVignette: 0.55, uGrain: 0.025 });
   }
 }

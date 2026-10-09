@@ -2,7 +2,7 @@
 
 An immersive, animated painting program in the manner of the Carrières des Lumières shows in Les Baux-de-Provence, built around the paintings of J. M. W. Turner. It runs in the browser on WebGL2, with no build step and no dependencies.
 
-The painting on the wall moves the way the Van Gogh show moved: the strokes churn, the water ripples, light breathes, mist drifts, snow spirals into a vortex, and each work paints itself in or dissolves into the next. Visitors can swap the paintings, add their own, retune every effect, walk around a simulated quarry hall, and export the result as a video.
+The painting on the wall moves the way the Van Gogh show moved: the strokes churn, the water ripples, light breathes, mist drifts, snow spirals into a vortex, and each work paints itself in or dissolves into the next. Visitors can swap the paintings, add their own, retune every effect and export the result as a video.
 
 ## Running it
 
@@ -21,7 +21,7 @@ Inside the Next.js app the same files are served from `public/`, so `pnpm dev` e
 
 The Turner reproductions are fetched at runtime from Wikimedia Commons (`upload.wikimedia.org` sends CORS headers, so WebGL can read the pixels). If the network blocks Wikimedia, each painting falls back to a procedural "study" painted in the browser, clearly labelled as such, so the show still runs offline.
 
-Useful URL parameters: `?painting=temeraire` starts on a given work, `?view=room` opens the quarry view, `?autoplay=0` starts paused.
+Useful URL parameters: `?painting=temeraire` starts on a given work, `?autoplay=0` starts paused.
 
 ## Reverse engineering the Carrières des Lumières shows
 
@@ -70,7 +70,6 @@ Each painting carries a "score" (a recipe of parameters) that a single fragment 
 | Chapters and titles | Five chapters (Dawn, The sea, Tempest, Fire and speed, Light and colour) with title cards drawn into a texture so recordings include them. | `paintings.js`, `drawTitle` in `main.js` |
 | Music | A generative WebAudio score per mood (pads, sea or wind, bells) inside a long synthetic reverb; its level, or the level of a track you load, makes the light pulse. | `audio.js` |
 | Sound effects | A soundscape per painting, all synthesised: beds of shaped noise for rain, wind and fire that follow the score (more rain in the editor means louder rain), a fire in three bands (rumble, roar, hiss) that flickers several times a second and flares up, and events for surf, lapping water, gulls, birdsong, thunder, creaking timber, a steam tug, ship and church bells, mountain horns and glassy tones of light. The train is heard where it is: it blows off steam and whistles as it sets off, its exhaust beats quicken and grow louder as it comes closer, it whistles again near the viewer, and its sound pans across the wall with it. | `audio.js` |
-| The quarry | A ray-traced limestone hall with pillars and visitor silhouettes; the frame wraps around it from a central projector, mirrored so it is seamless, with a darkened mirror on the floor. | `ROOM_FRAG` in `shaders.js` |
 | Moving elements | Each element is cut inside an ellipse that can be tilted to lie along the object (a train along its track), or along an outline traced around it, the way a studio rotoscopes (the locomotive is painted in the same dark tones as the viaduct under it, so it is traced rather than separated by colour), optionally snapped onto the most distinct dark or bright mass near its hint, matted against the background colours found on its own side of a ring around it, and lifted onto its own layer. The hole is repainted with a push-pull fill blended with a directional fill that carries lines such as a viaduct across the gap. The layer then moves on the GPU: an approach, a drift, rocking about the waterline, rising or setting, or pulsing. An approaching element sets off from where it is painted and runs along the line from its vanishing point toward the viewer, in perspective: as its depth falls it grows, gathers speed and blurs with motion, leaves as it fills the frame, and after a moment on the empty track the next one emerges where the painter put it. | `elements.js`, `elementColor` in `shaders.js` |
 | Visitor interaction | The pointer stirs the wet paint through a self-advecting displacement field. | `DISP_FRAG` in `shaders.js` |
 
@@ -96,7 +95,7 @@ Press **Edit** to shape it. The painting is fitted beside the panel with markers
 
 Under **Moving elements**, press **Add moving element**, drag its numbered marker onto an object and choose how it moves: comes toward the viewer, drifts across, rocks on the waves, rises or sets, or pulses. The dashed outline is the area that is cut; the **Size** slider fits it to the object, **Tilt** turns it to lie along a diagonal object and **Motion** sets how much it moves. An element that comes toward the viewer gets a second marker (⊙) for the point it comes from: it sets off from where it is painted and runs along the line from that point toward you, so place the marker up the track or road behind it. Compact objects that stand out from their surroundings (a dark boat on bright water, a sun in haze) cut best; an object painted in the same colours as what surrounds it moves only partly.
 
-**Quarry view** shows the work wrapped around the hall (drag to look around). **Record** saves a WebM video of the canvas, with the score when sound is on, and the ◉ button saves a still. Keyboard: arrows change painting, space plays or pauses, E edits, V switches view, S toggles sound, R records, F goes fullscreen, H hides the interface.
+**Record** saves a WebM video of the canvas, with the score when sound is on, and the ◉ button saves a still. Keyboard: arrows change painting, space plays or pauses, E edits, S toggles sound, R records, F goes fullscreen, H hides the interface.
 
 ## Files
 

@@ -70,7 +70,6 @@ const state = {
   trans: 1,
   transType: 'brush',
   transitionOverride: 'auto',
-  mode: params.get('view') === 'room' ? 'room' : 'flat',
   editing: false,
   quality: 1,
   view: [0, 0, 1, 1],
@@ -78,8 +77,6 @@ const state = {
   mouseVel: [0, 0],
   mouseSmooth: [0.5, 0.5],
   pointerDown: false,
-  look: [0, 0.08],
-  lastLookInput: -100,
   textAlpha: 0,
   textRect: [0, 0, 0, 0],
   chapterShown: false,
@@ -446,7 +443,7 @@ function titleAlpha(tau) {
 
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  renderer.resize(window.innerWidth, window.innerHeight, dpr, state.quality, state.mode);
+  renderer.resize(window.innerWidth, window.innerHeight, dpr, state.quality);
   const W = canvas.width;
   const H = canvas.height;
   const hPx = Math.min(H * 0.2, (W * 0.92) / 4);
@@ -499,9 +496,6 @@ function frame(now) {
       return lerp(v, m, 1 - Math.exp(-dt * 2));
     });
     const views = layerViews(r, motion);
-    if (state.mode === 'room' && performance.now() - state.lastLookInput > 5000) {
-      state.look[0] = lerp(state.look[0], Math.sin(state.time * 0.045) * 0.9, 1 - Math.exp(-dt * 0.5));
-    }
     const { recipe, elements, smokeScale } = animateElements(r, motion);
     ambient.update(soundScene(recipe, elements, views.land));
     renderer.render({
@@ -521,9 +515,6 @@ function frame(now) {
       transitionType: state.transType,
       textRect: state.textRect,
       textAlpha: titleAlpha(state.paintTime),
-      mode: state.mode,
-      look: state.look,
-      fov: window.innerWidth < window.innerHeight ? 95 : 78,
     });
     state.mouseVel = [0, 0];
     if (state.snapshot) {
@@ -627,30 +618,18 @@ function fileName() {
 }
 
 // ---------------------------------------------------------------------------
-// Pointer: stir the paint, or look around the quarry.
+// Pointer: stir the paint.
 
 function pointerToScene(e) {
   return [e.clientX / window.innerWidth, e.clientY / window.innerHeight];
 }
 
-let lastPointer = null;
 canvas.addEventListener('pointerdown', (e) => {
   state.pointerDown = true;
-  lastPointer = [e.clientX, e.clientY];
   canvas.setPointerCapture(e.pointerId);
-  if (state.mode === 'room') document.body.classList.add('dragging');
 });
 canvas.addEventListener('pointermove', (e) => {
   wake();
-  if (state.mode === 'room') {
-    if (state.pointerDown && lastPointer) {
-      state.look[0] += (e.clientX - lastPointer[0]) * 0.004;
-      state.look[1] = clamp(state.look[1] - (e.clientY - lastPointer[1]) * 0.003, -0.45, 0.7);
-      state.lastLookInput = performance.now();
-    }
-    lastPointer = [e.clientX, e.clientY];
-    return;
-  }
   const p = pointerToScene(e);
   if (state.mouse[0] > -1) {
     const strength = state.pointerDown ? 1.2 : 0.3;
@@ -661,20 +640,12 @@ canvas.addEventListener('pointermove', (e) => {
 });
 const endPointer = () => {
   state.pointerDown = false;
-  lastPointer = null;
-  document.body.classList.remove('dragging');
 };
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('pointerleave', () => {
   state.mouse = [-10, -10];
 });
-canvas.addEventListener('wheel', (e) => {
-  if (state.mode !== 'room') return;
-  e.preventDefault();
-  state.look[1] = clamp(state.look[1] - e.deltaY * 0.0008, -0.45, 0.7);
-  state.lastLookInput = performance.now();
-}, { passive: false });
 
 // Interface fades out during the show.
 let idleTimer = 0;
@@ -733,17 +704,6 @@ for (const t of TRANSITIONS) {
 transitionSel.addEventListener('change', () => {
   state.transitionOverride = transitionSel.value;
 });
-
-const viewBtn = $('viewBtn');
-function setMode(mode) {
-  state.mode = mode;
-  document.body.classList.toggle('room', mode === 'room');
-  viewBtn.textContent = mode === 'room' ? 'Flat view' : 'Quarry view';
-  viewBtn.classList.toggle('active', mode === 'room');
-  if (mode === 'room' && state.editing) setEditing(false);
-  resize();
-}
-viewBtn.addEventListener('click', () => setMode(state.mode === 'room' ? 'flat' : 'room'));
 
 const soundBtn = $('soundBtn');
 async function toggleSound() {
@@ -915,7 +875,6 @@ function refreshEditor() {
 }
 
 function setEditing(v) {
-  if (v && state.mode === 'room') setMode('flat');
   state.editing = v;
   editorEl.hidden = !v;
   if (!v) {
@@ -1075,7 +1034,6 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     setPlaying(!state.playing);
   } else if (k === 'e') setEditing(!state.editing);
-  else if (k === 'v') setMode(state.mode === 'room' ? 'flat' : 'room');
   else if (k === 's') toggleSound();
   else if (k === 'r') toggleRecord();
   else if (k === 'f') toggleFullscreen();
@@ -1088,7 +1046,6 @@ window.addEventListener('keydown', (e) => {
 // Boot
 
 async function boot() {
-  setMode(state.mode);
   resize();
   try {
     await document.fonts?.load('italic 500 64px "Cormorant Garamond"');
@@ -1104,4 +1061,4 @@ async function boot() {
 boot();
 
 // Exposed for debugging and automated checks.
-window.turnerLumieres = { state, goTo, setMode, setEditing, renderer, ambient };
+window.turnerLumieres = { state, goTo, setEditing, renderer, ambient };

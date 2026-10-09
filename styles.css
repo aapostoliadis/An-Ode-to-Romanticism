@@ -47,14 +47,6 @@ body {
   cursor: crosshair;
 }
 
-body.room #stage {
-  cursor: grab;
-}
-
-body.room.dragging #stage {
-  cursor: grabbing;
-}
-
 button,
 select,
 input {
