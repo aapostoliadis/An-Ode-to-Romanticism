@@ -6,12 +6,16 @@ The painting on the wall moves the way the Van Gogh show moved: the strokes chur
 
 ## Running it
 
-Any static file server works. From the repository root:
+Any static file server works. The command has to run from the root of a checkout that contains this folder, since the path is relative:
 
 ```bash
-npx http-server public/turner-lumieres -p 8080
-# then open http://localhost:8080
+git clone https://github.com/aapostoliadis/akis.git
+cd akis
+npx http-server public/turner-lumieres -p 8090 -c-1
+# then open http://localhost:8090
 ```
+
+If the port is taken (`EADDRINUSE`), pick any other free port. `-c-1` turns off caching so edits show on reload.
 
 Inside the Next.js app the same files are served from `public/`, so `pnpm dev` exposes it at `http://localhost:3000/turner-lumieres/index.html`.
 
