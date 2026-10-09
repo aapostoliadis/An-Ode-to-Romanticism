@@ -36,7 +36,9 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 
 const TRANSITION_SECONDS = { brush: 3.4, bleed: 3.8, light: 3.6, flow: 3.4, dark: 3, tiles: 3.6 };
 const REVEAL_SECONDS = 8;
-const STORAGE_PREFIX = 'turner-lumieres:recipe:';
+// Bumped when the shape of a score changes, so old saved edits do not hide
+// new defaults (v2: the train sets off from where it is painted).
+const STORAGE_PREFIX = 'turner-lumieres:recipe:v2:';
 
 let renderer;
 try {
@@ -59,6 +61,9 @@ const state = {
   current: null,
   playing: params.get('autoplay') !== '0' && !reducedMotion,
   paintTime: 0,
+  // Clock of the moving elements: restarts with each painting and never
+  // jumps, so a train always sets off from where it is painted.
+  elemTime: 0,
   time: 0,
   reveal: 1,
   trans: 1,
@@ -253,6 +258,7 @@ function applyPainting(index, prepared) {
   state.current = { ...prepared, recipe };
   state.index = index;
   state.paintTime = 0;
+  state.elemTime = 0;
   if (first) {
     state.reveal = 0;
     state.trans = 1;
@@ -494,6 +500,7 @@ function frame(now) {
       state.look[0] = lerp(state.look[0], Math.sin(state.time * 0.045) * 0.9, 1 - Math.exp(-dt * 0.5));
     }
     const { recipe, elements, smokeScale } = animateElements(r, motion);
+    ambient.update(soundScene(recipe, elements, views.land));
     renderer.render({
       recipe,
       elements,
@@ -557,7 +564,7 @@ function animateElements(r, motion) {
   let smokeScale = 1;
   let smokeTaken = false;
   const elements = r.elements.map((el) => {
-    const st = elementState(el, state.time, progress, motion);
+    const st = elementState(el, state.elemTime, progress, motion);
     const cx = el.x + st.offset[0];
     const cy = el.y + st.offset[1];
     if (el.smoke && !smokeTaken) {
@@ -576,8 +583,31 @@ function animateElements(r, motion) {
   return { recipe: live, elements, smokeScale };
 }
 
+// What the sound effects need to know: the soundscape, the live weather of
+// the score and where on the wall the train is.
+function soundScene(live, elements, view) {
+  const r = state.current.recipe;
+  const i = r.elements.findIndex((el) => el.type === 'approach');
+  const train = i < 0
+    ? null
+    : { x: (elements[i].x + elements[i].offset[0] - view[0]) / view[2], scale: elements[i].scale, alpha: elements[i].alpha };
+  return {
+    scape: r.sounds,
+    mood: r.mood,
+    level: r.sfx,
+    rain: live.rain,
+    snow: live.snow,
+    fire: live.fire,
+    wind: live.wind,
+    water: live.water,
+    rocking: r.elements.some((el) => el.type === 'rock' || el.type === 'drift'),
+    train,
+  };
+}
+
 function tick(dt) {
   state.paintTime += dt;
+  state.elemTime += dt;
   if (state.reveal < 1) state.reveal += dt / REVEAL_SECONDS;
   if (state.trans < 1) state.trans += dt / (TRANSITION_SECONDS[state.transType] ?? 3.4);
   const r = state.current.recipe;
@@ -834,6 +864,9 @@ const elementsEditor = buildElementsEditor($('elementsEditor'), {
       el.rx = value;
       el.ry = value * ratio;
       scheduleRecut();
+    } else if (key === 'angle') {
+      el.angle = value;
+      scheduleRecut();
     } else {
       el[key] = value;
     }
@@ -1066,4 +1099,4 @@ async function boot() {
 boot();
 
 // Exposed for debugging and automated checks.
-window.turnerLumieres = { state, goTo, setMode, setEditing, renderer };
+window.turnerLumieres = { state, goTo, setMode, setEditing, renderer, ambient };

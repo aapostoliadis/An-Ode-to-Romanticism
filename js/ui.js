@@ -1,4 +1,5 @@
 import { TRANSITIONS } from './paintings.js';
+import { SOUNDSCAPES } from './audio.js';
 
 const MOOD_OPTIONS = [
   { id: 'dawn', label: 'Dawn, airy' },
@@ -6,8 +7,8 @@ const MOOD_OPTIONS = [
   { id: 'warm', label: 'Warm sunset' },
   { id: 'tragic', label: 'Tragic sea' },
   { id: 'storm', label: 'Storm wind' },
-  { id: 'fire', label: 'Fire crackle' },
-  { id: 'speed', label: 'Rain and rhythm' },
+  { id: 'fire', label: 'Fire, smouldering' },
+  { id: 'speed', label: 'Rain and speed' },
   { id: 'radiant', label: 'Radiant light' },
 ];
 
@@ -69,7 +70,14 @@ export const CONTROL_GROUPS = [
       { key: 'zoom', label: 'Camera push', min: 1, max: 2.5, step: 0.01 },
       { key: 'duration', label: 'Time on the wall', min: 12, max: 120, step: 1, unit: 's' },
       { key: 'transition', label: 'Arrives with', type: 'select', options: TRANSITIONS },
+    ],
+  },
+  {
+    title: 'Sound',
+    items: [
       { key: 'mood', label: 'Score', type: 'select', options: MOOD_OPTIONS },
+      { key: 'sounds', label: 'Sound effects', type: 'select', options: SOUNDSCAPES },
+      { key: 'sfx', label: 'Effects level', min: 0, max: 1.5, step: 0.01 },
     ],
   },
 ];
@@ -276,10 +284,11 @@ export class Handles {
       place(vanish, el.vx, el.vy, el.type === 'approach');
       const [ax, ay] = toScreen(el.x - el.rx, el.y - el.ry);
       const [bx, by] = toScreen(el.x + el.rx, el.y + el.ry);
-      outline.style.left = `${ax}px`;
-      outline.style.top = `${ay}px`;
+      outline.style.left = `${(ax + bx) / 2}px`;
+      outline.style.top = `${(ay + by) / 2}px`;
       outline.style.width = `${bx - ax}px`;
       outline.style.height = `${by - ay}px`;
+      outline.style.transform = `translate(-50%, -50%) rotate(${el.angle ?? 0}deg)`;
     });
   }
 }
@@ -301,7 +310,8 @@ export function buildElementsEditor(container, { onChange, onAdd, onRemove }) {
     const name = document.createElement('span');
     name.textContent = label;
     const out = document.createElement('output');
-    out.textContent = Number(value).toFixed(2);
+    const digits = step >= 1 ? 0 : 2;
+    out.textContent = Number(value).toFixed(digits);
     lab.append(name, out);
     const input = document.createElement('input');
     input.type = 'range';
@@ -311,7 +321,7 @@ export function buildElementsEditor(container, { onChange, onAdd, onRemove }) {
     input.value = value;
     input.setAttribute('aria-label', label);
     input.addEventListener('input', () => {
-      out.textContent = Number(input.value).toFixed(2);
+      out.textContent = Number(input.value).toFixed(digits);
       onInput(Number(input.value));
     });
     row.append(lab, input);
@@ -351,6 +361,7 @@ export function buildElementsEditor(container, { onChange, onAdd, onRemove }) {
           typeRow,
           slider('Motion', el.amount ?? 1, 0, 2, 0.01, (v) => onChange(i, 'amount', v)),
           slider('Size', el.rx, 0.02, 0.35, 0.005, (v) => onChange(i, 'size', v)),
+          slider('Tilt', el.angle ?? 0, -75, 75, 1, (v) => onChange(i, 'angle', v)),
         );
         list.append(card);
       });

@@ -37,6 +37,8 @@ Watching how a still painting becomes forty seconds of moving image, the product
 
 **Elements are cut out and set moving.** Boats glide or pitch on the swell, a sun rises, a train runs toward the visitors. A studio rotoscopes each object, repaints the background behind it and animates the cut-out as its own layer, often with a perspective scale so it seems to come out of the wall.
 
+**Sound places you in the scene.** Under the music the shows lay sound effects that belong to each work: the sea, wind, rain, crowds, bells, an engine. They are timed to what moves on the wall, so you hear the train before it reaches you.
+
 **Small living elements are added sparingly.** Water shimmers, clouds and smoke drift, flames flicker, petals or snow fall, windows light up at night. They are always tinted by and blended into the painting so they read as paint.
 
 **Light is the protagonist.** Glows bloom and breathe, rays fan out, and whole walls brighten and darken with the music.
@@ -66,38 +68,39 @@ Each painting carries a "score" (a recipe of parameters) that a single fragment 
 | Painting paints itself | Two-stage reveal along a line-integral-convolution stroke map: colour washes first, then the strokes, spreading out from the light. | `analysis.js`, scene shader |
 | Transitions | Brushstroke wipe, watercolour bleed, flood of light, paint flowing away, through darkness, mosaic tiles. The outgoing frame is frozen into a texture and dissolved over the live new painting. | `transition` in `shaders.js` |
 | Chapters and titles | Five chapters (Dawn, The sea, Tempest, Fire and speed, Light and colour) with title cards drawn into a texture so recordings include them. | `paintings.js`, `drawTitle` in `main.js` |
-| Music | A generative WebAudio score per mood (pads, sea or wind, bells, fire crackle, a train pulse) inside a long synthetic reverb; its level, or the level of a track you load, makes the light pulse. | `audio.js` |
+| Music | A generative WebAudio score per mood (pads, sea or wind, bells) inside a long synthetic reverb; its level, or the level of a track you load, makes the light pulse. | `audio.js` |
+| Sound effects | A soundscape per painting, all synthesised: beds of shaped noise for rain, wind and fire that follow the score (more rain in the editor means louder rain), and events for surf, lapping water, gulls, birdsong, thunder, creaking timber, a steam tug, ship and church bells, mountain horns and glassy tones of light. The train is heard where it is: it blows off steam and whistles as it sets off, its exhaust beats quicken and grow louder as it comes closer, it whistles again near the viewer, and its sound pans across the wall with it. | `audio.js` |
 | The quarry | A ray-traced limestone hall with pillars and visitor silhouettes; the frame wraps around it from a central projector, mirrored so it is seamless, with a darkened mirror on the floor. | `ROOM_FRAG` in `shaders.js` |
-| Moving elements | Each element is snapped onto the most distinct dark or bright mass near its hint, matted against the background colours found on its own side of a ring around it, and lifted onto its own layer. The hole is repainted with a push-pull fill blended with a directional fill that carries lines such as a viaduct across the gap. The layer then moves on the GPU: a perspective approach from a vanishing point estimated from the strokes around it (with motion blur), a drift, rocking about the waterline, rising or setting, or pulsing. | `elements.js`, `elementColor` in `shaders.js` |
+| Moving elements | Each element is cut inside an ellipse that can be tilted to lie along the object (a train along its track), optionally snapped onto the most distinct dark or bright mass near its hint, matted against the background colours found on its own side of a ring around it, and lifted onto its own layer. The hole is repainted with a push-pull fill blended with a directional fill that carries lines such as a viaduct across the gap. The layer then moves on the GPU: an approach, a drift, rocking about the waterline, rising or setting, or pulsing. An approaching element sets off from where it is painted and runs along the line from its vanishing point toward the viewer, in perspective: as its depth falls it grows, gathers speed and blurs with motion, leaves as it fills the frame, and after a moment on the empty track the next one emerges where the painter put it. | `elements.js`, `elementColor` in `shaders.js` |
 | Visitor interaction | The pointer stirs the wet paint through a self-advecting displacement field. | `DISP_FRAG` in `shaders.js` |
 
 ## The Turner programme
 
-| Chapter | Painting | What moves |
-| --- | --- | --- |
-| I. Dawn | Ulysses Deriding Polyphemus (1829) | The sun climbs out of the sea, the galleon sways from its waterline, golden rays, flood-of-light entrance |
-| I. Dawn | Norham Castle, Sunrise (c. 1845) | The sun rises over the castle, dense drifting mist, watercolour bleed |
-| II. The sea | The Fighting Temeraire (1839) | The tug chugs with its smoke plume, the sun sinks, sunset rays, water |
-| II. The sea | The Slave Ship (1840) | The ship pitches in the swell, churning sea, spray, red sky flicker |
-| III. Tempest | Snow Storm, Steam-Boat off a Harbour's Mouth (1842) | The steam-boat rolls in the vortex, snow and spray spiralling around it |
-| III. Tempest | Snow Storm, Hannibal and his Army Crossing the Alps (1812) | The pale sun sinks behind the storm arc, driving snow |
-| IV. Fire and speed | The Burning of the Houses of Lords and Commons (1834) | Flickering fire, rising embers, reflections on the Thames |
-| IV. Fire and speed | Rain, Steam and Speed (1844) | The locomotive runs along the viaduct toward the viewer with its steam, slanting rain, mist |
-| V. Light and colour | Light and Colour (Goethe's Theory) (1843) | The heart of the vortex of light breathes, the strongest glow of the show |
+| Chapter | Painting | What moves | What you hear |
+| --- | --- | --- | --- |
+| I. Dawn | Ulysses Deriding Polyphemus (1829) | The sun climbs out of the sea, the galleon sways from its waterline, golden rays, flood-of-light entrance | Surf, gulls, the galleon's timbers creaking |
+| I. Dawn | Norham Castle, Sunrise (c. 1845) | The sun rises over the castle, dense drifting mist, watercolour bleed | The river lapping, dawn birdsong |
+| II. The sea | The Fighting Temeraire (1839) | The tug chugs with its smoke plume, the sun sinks, sunset rays, water | Calm water, the tug's engine and paddles, a ship's bell, distant gulls |
+| II. The sea | The Slave Ship (1840) | The ship pitches in the swell, churning sea, spray, red sky flicker | Heavy surf, storm wind, thunder, straining timber |
+| III. Tempest | Snow Storm, Steam-Boat off a Harbour's Mouth (1842) | The steam-boat rolls in the vortex, snow and spray spiralling around it | Howling wind, breaking seas, the paddle steamer, its bell |
+| III. Tempest | Snow Storm, Hannibal and his Army Crossing the Alps (1812) | The pale sun sinks behind the storm arc, driving snow | Mountain wind, thunder rolling, far horns |
+| IV. Fire and speed | The Burning of the Houses of Lords and Commons (1834) | Flickering fire, rising embers, reflections on the Thames | The roar and crackle of the fire, timbers falling, church bells ringing the alarm, the Thames |
+| IV. Fire and speed | Rain, Steam and Speed (1844) | The locomotive sets off from where Turner painted it and runs down the viaduct, diagonally toward the viewer, with its steam, slanting rain, mist | Rain, the engine's whistle and blown-off steam, exhaust beats and rail joints quickening as it nears |
+| V. Light and colour | Light and Colour (Goethe's Theory) (1843) | The heart of the vortex of light breathes, the strongest glow of the show | Glassy tones of light, water dripping after the deluge |
 
 ## Making your own animated painting
 
 Pick a painting in the gallery, or press **Your painting** to drop in any image file or paste an image address. The program analyses it and writes a starting score, finding the light source and horizon and switching fire on for warm, bright images.
 
-Press **Edit** to shape it. The painting is fitted beside the panel with markers for the light (outer ring), the vortex, the camera focus (inner dot), the smoke source and the horizon line; drag them into place. The sliders cover stroke flow, wind, vortex, the layers (clouds drift, foliage stirs, brush texture, drifting light, depth between layers), glow, rays, water, mist, smoke, rain, snow, fire, embers, camera push, time on the wall, the entrance transition and the score. **Show the layers** tints the sky blue, the water teal and the land green; dragging the horizon re-separates them. Edits are saved in the browser for that painting, and **Export** and **Import** move a score between machines as JSON.
+Press **Edit** to shape it. The painting is fitted beside the panel with markers for the light (outer ring), the vortex, the camera focus (inner dot), the smoke source and the horizon line; drag them into place. The sliders cover stroke flow, wind, vortex, the layers (clouds drift, foliage stirs, brush texture, drifting light, depth between layers), glow, rays, water, mist, smoke, rain, snow, fire, embers, camera push, time on the wall and the entrance transition. Under **Sound** you choose the score, the soundscape (or let it match the score) and the level of the effects. **Show the layers** tints the sky blue, the water teal and the land green; dragging the horizon re-separates them. Edits are saved in the browser for that painting, and **Export** and **Import** move a score between machines as JSON.
 
-Under **Moving elements**, press **Add moving element**, drag its numbered marker onto an object and choose how it moves: comes toward the viewer, drifts across, rocks on the waves, rises or sets, or pulses. The dashed outline is the area that is cut; the **Size** slider fits it to the object and **Motion** sets how much it moves. An element that comes toward the viewer gets a second marker (⊙) for the point it comes from. Compact objects that stand out from their surroundings (a dark boat on bright water, a sun in haze) cut best; an object painted in the same colours as what surrounds it moves only partly.
+Under **Moving elements**, press **Add moving element**, drag its numbered marker onto an object and choose how it moves: comes toward the viewer, drifts across, rocks on the waves, rises or sets, or pulses. The dashed outline is the area that is cut; the **Size** slider fits it to the object, **Tilt** turns it to lie along a diagonal object and **Motion** sets how much it moves. An element that comes toward the viewer gets a second marker (⊙) for the point it comes from: it sets off from where it is painted and runs along the line from that point toward you, so place the marker up the track or road behind it. Compact objects that stand out from their surroundings (a dark boat on bright water, a sun in haze) cut best; an object painted in the same colours as what surrounds it moves only partly.
 
 **Quarry view** shows the work wrapped around the hall (drag to look around). **Record** saves a WebM video of the canvas, with the score when sound is on, and the ◉ button saves a still. Keyboard: arrows change painting, space plays or pauses, E edits, V switches view, S toggles sound, R records, F goes fullscreen, H hides the interface.
 
 ## Files
 
-`index.html` and `styles.css` hold the page. In `js/`, `main.js` runs the show (loading, sequencing, camera, titles, input), `paintings.js` is the catalogue and the scores, `analysis.js` measures strokes, depth, light and horizon, `layers.js` separates sky, water and land, `elements.js` cuts out and animates the moving elements, `loader.js` fetches images and paints the offline studies, `shaders.js` contains every GLSL pass, `renderer.js` drives WebGL2, `audio.js` is the generative score, `recorder.js` exports video and stills, and `ui.js` builds the gallery, editor and markers.
+`index.html` and `styles.css` hold the page. In `js/`, `main.js` runs the show (loading, sequencing, camera, titles, input), `paintings.js` is the catalogue and the scores, `analysis.js` measures strokes, depth, light and horizon, `layers.js` separates sky, water and land, `elements.js` cuts out and animates the moving elements, `loader.js` fetches images and paints the offline studies, `shaders.js` contains every GLSL pass, `renderer.js` drives WebGL2, `audio.js` is the generative score and the sound effects, `recorder.js` exports video and stills, and `ui.js` builds the gallery, editor and markers.
 
 ## Notes and limits
 

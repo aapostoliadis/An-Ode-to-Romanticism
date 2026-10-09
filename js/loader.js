@@ -222,17 +222,30 @@ const MOTIFS = {
       ctx.fill();
     }
   },
+  // The locomotive lies along its track (angle, clockwise), its chimney and
+  // glowing front toward the viewer, steam trailing back along the line.
   train(ctx, m, W, H) {
     const s = m.s * H;
     const x = m.x * W;
     const y = m.y * H;
-    ctx.fillStyle = rgba(m.color, 0.95);
-    ctx.fillRect(x - s * 0.9, y - s * 0.55, s * 1.8, s * 0.6);
-    ctx.fillRect(x - s * 0.15, y - s * 1.0, s * 0.25, s * 0.5);
-    softEllipse(ctx, x + s * 0.5, y - s * 0.25, s * 0.25, s * 0.2, '#ffd27a', 0.9);
+    const a = ((m.angle ?? 0) * Math.PI) / 180;
     for (let k = 0; k < 6; k++) {
-      softEllipse(ctx, x - s * (0.2 + k * 0.5), y - s * (1.2 + k * 0.25), s * (0.4 + k * 0.15), s * 0.3, '#ece4d0', 0.5);
+      const d = -s * (0.6 + k * 0.55);
+      softEllipse(ctx, x + Math.cos(a) * d, y + Math.sin(a) * d - s * (0.9 + k * 0.12), s * (0.45 + k * 0.15), s * 0.3, '#ece4d0', 0.45);
     }
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(a);
+    ctx.fillStyle = rgba(m.color, 0.95);
+    ctx.fillRect(-s * 1.5, -s * 0.35, s * 2.3, s * 0.6);
+    ctx.fillRect(s * 0.5, -s * 0.45, s * 0.45, s * 0.8);
+    ctx.restore();
+    // The chimney stays upright, at the front.
+    const cx = x + Math.cos(a) * s * 0.7;
+    const cy = y + Math.sin(a) * s * 0.7;
+    ctx.fillStyle = rgba(m.color, 0.95);
+    ctx.fillRect(cx - s * 0.08, cy - s * 0.95, s * 0.16, s * 0.6);
+    softEllipse(ctx, x + Math.cos(a) * s * 0.85, y + Math.sin(a) * s * 0.85 + s * 0.15, s * 0.22, s * 0.16, '#ff8a4a', 0.9);
   },
   steamboat(ctx, m, W, H) {
     const s = m.s * H;

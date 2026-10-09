@@ -87,6 +87,9 @@ export const DEFAULT_RECIPE = {
   duration: 38,
   transition: 'brush',
   mood: 'warm',
+  // Sound effects: a soundscape from audio.js, or 'mood' to match the score.
+  sounds: 'mood',
+  sfx: 0.8,
   // Cut-out elements that move (see elements.js). x/y may be 'sun'; snap
   // moves the hint onto the darkest or brightest mass within snapRadius.
   elements: [],
@@ -132,6 +135,7 @@ export const PAINTINGS = [
       zoom: 1.4,
       transition: 'light',
       mood: 'myth',
+      sounds: 'sea',
       // The sun climbs out of the sea; the galleon sways from its waterline.
       elements: [
         { type: 'rise', x: 'sun', y: 'sun', rx: 0.07, ry: 0.09, matte: 'light', dy: -0.05, light: true },
@@ -178,6 +182,7 @@ export const PAINTINGS = [
       zoom: 1.3,
       transition: 'bleed',
       mood: 'dawn',
+      sounds: 'river',
       elements: [{ type: 'rise', x: 'sun', y: 'sun', rx: 0.07, ry: 0.09, matte: 'light', dy: -0.06, light: true }],
     },
     study: {
@@ -222,6 +227,7 @@ export const PAINTINGS = [
       zoom: 1.35,
       transition: 'brush',
       mood: 'warm',
+      sounds: 'harbour',
       // The tug chugs with its smoke; the sun sinks toward the horizon.
       elements: [
         {
@@ -284,6 +290,7 @@ export const PAINTINGS = [
       zoom: 1.3,
       transition: 'flow',
       mood: 'tragic',
+      sounds: 'tempest',
       // The ship pitches in the swell.
       elements: [
         { type: 'rock', x: 0.22, y: 0.4, rx: 0.11, ry: 0.13, snap: 'dark', snapRadius: 0.1, bob: 0.005, rock: 0.03, period: 5 },
@@ -338,6 +345,7 @@ export const PAINTINGS = [
       landAbove: false,
       transition: 'tiles',
       mood: 'storm',
+      sounds: 'blizzard',
       // The steam-boat rolls in the heart of the vortex.
       elements: [
         { type: 'rock', x: 0.48, y: 0.46, rx: 0.08, ry: 0.16, snap: 'dark', snapRadius: 0.08, bob: 0.006, rock: 0.035, period: 4.5 },
@@ -387,6 +395,7 @@ export const PAINTINGS = [
       zoom: 1.3,
       transition: 'dark',
       mood: 'storm',
+      sounds: 'alps',
       // The pale sun sinks as the storm closes over the army.
       elements: [{ type: 'rise', x: 'sun', y: 'sun', rx: 0.06, ry: 0.09, matte: 'light', dy: 0.035, light: true }],
     },
@@ -434,6 +443,7 @@ export const PAINTINGS = [
       zoom: 1.4,
       transition: 'light',
       mood: 'fire',
+      sounds: 'fire',
     },
     study: {
       sky: [[0, '#141826'], [0.3, '#3a2c3a'], [0.5, '#c06a2a'], [0.62, '#f2b04a'], [1, '#1e1812']],
@@ -472,30 +482,32 @@ export const PAINTINGS = [
       sunColor: '#fff0c8',
       water: 0.35,
       smoke: 0.35,
-      smokeX: 0.7,
-      smokeY: 0.6,
+      smokeX: 0.669,
+      smokeY: 0.545,
       smokeColor: '#e8e0cc',
       zoom: 1.55,
       focusX: 0.6,
       focusY: 0.6,
       transition: 'brush',
       mood: 'speed',
-      // The locomotive drives along the viaduct toward the viewer.
+      sounds: 'train',
+      // The locomotive, its chimney and its lamps, lying along the viaduct.
+      // It sets off from where Turner painted it and runs down the line,
+      // diagonally toward the viewer, coming from the point where the
+      // viaduct vanishes into the rain behind it.
       elements: [
         {
           type: 'approach',
-          x: 0.7,
-          y: 0.63,
-          rx: 0.085,
-          ry: 0.1,
-          snap: 'dark',
-          snapRadius: 0.12,
-          vx: 'auto',
-          vy: 'auto',
-          zFar: 3.2,
-          zNear: 0.5,
-          period: 12,
-          phase: 0.35,
+          x: 0.626,
+          y: 0.598,
+          rx: 0.116,
+          ry: 0.089,
+          angle: 24,
+          vx: 0.505,
+          vy: 0.526,
+          zNear: 0.25,
+          period: 13,
+          delay: 3,
           smoke: true,
         },
       ],
@@ -508,8 +520,8 @@ export const PAINTINGS = [
       wind: 195,
       masses: [{ x: 0.15, y: 0.3, rx: 0.25, ry: 0.2, color: '#6f7a78', alpha: 0.45 }],
       motifs: [
-        { type: 'bridge', x: 0.25, y: 0.6, x1: 1.02, y1: 0.84, s: 0.06, color: '#3a2a1e' },
-        { type: 'train', x: 0.7, y: 0.69, s: 0.07, color: '#1a1410' },
+        { type: 'bridge', x: 0.4, y: 0.51, x1: 1.02, y1: 0.88, s: 0.06, color: '#3a2a1e' },
+        { type: 'train', x: 0.626, y: 0.598, s: 0.07, angle: 24, color: '#1a1410' },
       ],
     },
   },
@@ -542,6 +554,7 @@ export const PAINTINGS = [
       zoom: 1.5,
       transition: 'light',
       mood: 'radiant',
+      sounds: 'light',
       // The heart of the vortex breathes.
       elements: [{ type: 'pulse', x: 'sun', y: 'sun', rx: 0.12, ry: 0.12, matte: 'light', pulse: 0.05, period: 6 }],
     },

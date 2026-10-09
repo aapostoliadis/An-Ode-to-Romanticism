@@ -27,17 +27,22 @@ export const ELEMENT_TYPES = [
 
 // pivot: where rotation happens, as a fraction of the half height below
 // the centre (0.8 is about the waterline of a boat).
+// approach: zNear is the depth the element reaches before it leaves (0.25
+// means it ends four times nearer, and larger); delay is how
+// long it waits where it is painted before it sets off, in seconds.
 const TYPE_DEFAULTS = {
-  approach: { period: 12, vx: 'auto', vy: 'auto', zFar: 3.2, zNear: 0.5, phase: 0.35 },
+  approach: { period: 13, vx: 'auto', vy: 'auto', zNear: 0.25, delay: 3, phase: 0 },
   drift: { dx: 0.04, dy: 0, bob: 0.003, rock: 0.008, period: 8, pivot: 0.6 },
   rock: { dx: 0, dy: 0, bob: 0.004, rock: 0.03, period: 5, pivot: 0.8 },
   rise: { dx: 0, dy: -0.05, bob: 0, rock: 0, period: 10, pivot: 0 },
   pulse: { pulse: 0.06, period: 7 },
 };
 
-const BASE = { type: 'drift', x: 0.5, y: 0.5, rx: 0.08, ry: 0.08, matte: 'auto', amount: 1, smoke: false, light: false };
+// angle: tilt of the cut-out ellipse in degrees (clockwise), so a long
+// object lying on a diagonal, like a train, is cut tightly.
+const BASE = { type: 'drift', x: 0.5, y: 0.5, rx: 0.08, ry: 0.08, angle: 0, matte: 'auto', amount: 1, smoke: false, light: false };
 const NUMBER_KEYS = [
-  'x', 'y', 'rx', 'ry', 'amount', 'period', 'vx', 'vy', 'zFar', 'zNear', 'phase', 'dx', 'dy', 'bob', 'rock', 'pivot', 'pulse',
+  'x', 'y', 'rx', 'ry', 'angle', 'amount', 'period', 'vx', 'vy', 'zNear', 'delay', 'phase', 'dx', 'dy', 'bob', 'rock', 'pivot', 'pulse',
 ];
 const MATTES = ['auto', 'dark', 'light', 'ellipse'];
 
@@ -54,8 +59,8 @@ export function makeElement(partial = {}) {
 
 // Switching type keeps the region and swaps in that type's motion.
 export function retypeElement(el, type) {
-  const { x, y, rx, ry, matte, amount, smoke, light } = el;
-  return makeElement({ x, y, rx, ry, matte, amount, smoke, light, type });
+  const { x, y, rx, ry, angle, matte, amount, smoke, light } = el;
+  return makeElement({ x, y, rx, ry, angle, matte, amount, smoke, light, type });
 }
 
 // Validates elements coming from storage or an imported score.
@@ -110,10 +115,22 @@ function snapPosition(analysis, el, mode, radius) {
   return { x: bx, y: by };
 }
 
-// Where an approaching element comes from: follow the dominant line of the
-// strokes around it (a viaduct, a road, a shoreline) up into the distance.
+// Where an approaching element comes from: along its tilt when it has one
+// (a train lies along its track), otherwise along the dominant line of the
+// strokes around it (a viaduct, a road, a shoreline), up into the distance.
 export function estimateVanishing(analysis, el) {
   const { width: W, height: H, ana, aspect } = analysis;
+  if (el.angle) {
+    const a = (el.angle * Math.PI) / 180;
+    let dx = Math.cos(a);
+    let dy = Math.sin(a);
+    if (dy > 0 || (dy === 0 && dx > 0)) {
+      dx = -dx;
+      dy = -dy;
+    }
+    const L = Math.max(el.rx * aspect, el.ry) * 1.6;
+    return { vx: clamp(el.x + (dx * L) / aspect, 0, 1), vy: clamp(el.y + dy * L, 0, 1) };
+  }
   const R = Math.max(el.rx, el.ry) * 3;
   const x0 = clamp(Math.floor((el.x - R / aspect) * W), 0, W - 1);
   const x1 = clamp(Math.ceil((el.x + R / aspect) * W), 0, W - 1);
@@ -168,7 +185,9 @@ export function resolveElements(recipe, analysis) {
 }
 
 export function elementsKey(elements) {
-  return JSON.stringify(elements.map((e) => [e.x, e.y, e.rx, e.ry, e.matte].map((v) => (typeof v === 'number' ? v.toFixed(4) : v))));
+  return JSON.stringify(
+    elements.map((e) => [e.x, e.y, e.rx, e.ry, e.angle ?? 0, e.matte].map((v) => (typeof v === 'number' ? v.toFixed(4) : v))),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +311,8 @@ const SECTORS = 8;
 function computeMatte(data, b) {
   const { bw, bh } = b;
   const n = bw * bh;
+  const ca = Math.cos(b.angle ?? 0);
+  const sa = Math.sin(b.angle ?? 0);
   const ell = new Float32Array(n);
   const ang = new Float32Array(n);
   const lum = new Float32Array(n);
@@ -300,8 +321,10 @@ function computeMatte(data, b) {
   for (let y = 0; y < bh; y++) {
     for (let x = 0; x < bw; x++) {
       const k = y * bw + x;
-      const ex = (b.bx + x + 0.5 - b.cx) / b.rx;
-      const ey = (b.by + y + 0.5 - b.cy) / b.ry;
+      const ox = b.bx + x + 0.5 - b.cx;
+      const oy = b.by + y + 0.5 - b.cy;
+      const ex = (ox * ca + oy * sa) / b.rx;
+      const ey = (oy * ca - ox * sa) / b.ry;
       const d = Math.sqrt(ex * ex + ey * ey);
       ell[k] = d;
       ang[k] = Math.atan2(ey, ex);
@@ -545,7 +568,7 @@ function cutOne(orig, cur, b, seed) {
   const sh = Math.max(8, Math.round(b.bh * f));
   const small = f < 1;
   const scaledBox = small
-    ? { bw: sw, bh: sh, bx: 0, by: 0, cx: (b.cx - b.bx) * (sw / b.bw), cy: (b.cy - b.by) * (sh / b.bh), rx: b.rx * (sw / b.bw), ry: b.ry * (sh / b.bh), matte: b.matte }
+    ? { ...b, bw: sw, bh: sh, bx: 0, by: 0, cx: (b.cx - b.bx) * (sw / b.bw), cy: (b.cy - b.by) * (sh / b.bh), rx: b.rx * f, ry: b.ry * f }
     : b;
   const origData = small ? Uint8ClampedArray.from(resample(orig, b.bw, b.bh, sw, sh, 4)) : orig;
   const workData = small ? Uint8ClampedArray.from(resample(cur, b.bw, b.bh, sw, sh, 4)) : cur;
@@ -577,12 +600,16 @@ export function cutElements(source, elements) {
   const boxes = elements.map((el) => {
     const rx = Math.max(4, el.rx * W);
     const ry = Math.max(4, el.ry * H);
+    const angle = ((el.angle ?? 0) * Math.PI) / 180;
+    // Half extents of the tilted ellipse, with room for the ring around it.
+    const hx = Math.hypot(rx * Math.cos(angle), ry * Math.sin(angle));
+    const hy = Math.hypot(rx * Math.sin(angle), ry * Math.cos(angle));
     const m = 1.42;
-    const bx = clamp(Math.floor(el.x * W - rx * m), 0, W - 2);
-    const by = clamp(Math.floor(el.y * H - ry * m), 0, H - 2);
-    const bx1 = clamp(Math.ceil(el.x * W + rx * m), bx + 2, W);
-    const by1 = clamp(Math.ceil(el.y * H + ry * m), by + 2, H);
-    return { bx, by, bw: bx1 - bx, bh: by1 - by, cx: el.x * W, cy: el.y * H, rx, ry, matte: el.matte };
+    const bx = clamp(Math.floor(el.x * W - hx * m), 0, W - 2);
+    const by = clamp(Math.floor(el.y * H - hy * m), 0, H - 2);
+    const bx1 = clamp(Math.ceil(el.x * W + hx * m), bx + 2, W);
+    const by1 = clamp(Math.ceil(el.y * H + hy * m), by + 2, H);
+    return { bx, by, bw: bx1 - bx, bh: by1 - by, cx: el.x * W, cy: el.y * H, rx, ry, angle, matte: el.matte };
   });
   const originals = boxes.map((b) => ctx.getImageData(b.bx, b.by, b.bw, b.bh));
   const pieces = boxes.map((b, i) => {
@@ -610,26 +637,41 @@ export function cutElements(source, elements) {
 export function elementState(el, time, progress, motion = 1) {
   const amt = (el.amount ?? 1) * motion;
   if (el.type === 'approach') {
-    // Perspective approach along the line from the vanishing point through
-    // the element: screen position V + (P - V) * s, with s = 1 / depth.
-    const period = Math.max(2, el.period / Math.max(0.15, amt));
-    const u = (((time / period + (el.phase || 0)) % 1) + 1) % 1;
-    const zFar = Math.max(1.05, el.zFar);
-    const zNear = clamp(el.zNear, 0.1, 0.95);
-    const s = (1 / zFar) * (zFar / zNear) ** u;
-    const ds = (s * Math.log(zFar / zNear)) / period;
-    let bx = (el.x - el.vx) * ds * 0.08;
-    let by = (el.y - el.vy) * ds * 0.08;
+    // The element sets off from where it is painted and runs down its line
+    // toward the viewer. Its depth falls from 1 (as painted) to zNear; the
+    // screen position V + (P - V) * s, with s = 1 / depth, keeps it on the
+    // line from the vanishing point V through P, so it follows the track in
+    // perspective, grows, and seems to gather speed as it nears. It leaves
+    // as it fills the frame, the empty track rests a moment, and the next
+    // one emerges from the steam where the painter put it.
+    const period = Math.max(4, el.period / Math.max(0.15, amt));
+    const t = Math.max(0, time - (el.delay ?? 0));
+    const cyc = t / period + (el.phase || 0);
+    const u = cyc - Math.floor(cyc);
+    const RUN = 0.88;
+    const run = clamp(u / RUN, 0, 1);
+    const zNear = clamp(el.zNear ?? 0.25, 0.12, 0.9);
+    // Rolling start, then a steady rush: depth eases in and runs on.
+    const ease = run * (0.3 + 0.7 * run);
+    const z = 1 - (1 - zNear) * ease;
+    const s = 1 / z;
+    const dz = ((1 - zNear) * (0.3 + 1.4 * run)) / (RUN * period);
+    const ds = dz / (z * z);
+    // Motion blur along the line, longer as it speeds up.
+    let bx = (el.x - el.vx) * ds * 0.12;
+    let by = (el.y - el.vy) * ds * 0.12;
     const bl = Math.hypot(bx, by);
-    if (bl > 0.05) {
-      bx *= 0.05 / bl;
-      by *= 0.05 / bl;
+    if (bl > 0.04) {
+      bx *= 0.04 / bl;
+      by *= 0.04 / bl;
     }
+    const fadeIn = cyc < 1 ? 1 : smoothstep(0, 0.07, u);
+    const fadeOut = 1 - smoothstep(0.82, 1, run);
     return {
       offset: [(el.x - el.vx) * (s - 1), (el.y - el.vy) * (s - 1)],
       scale: s,
       rot: 0,
-      alpha: smoothstep(0, 0.12, u) * (1 - smoothstep(0.86, 1, u)),
+      alpha: fadeIn * fadeOut * (u < RUN ? 1 : 0),
       blur: [bx, by],
       pivot: [0, 0],
     };
