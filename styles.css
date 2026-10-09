@@ -190,8 +190,10 @@ body.idle {
   z-index: 10;
 }
 
+/* Every button stays on one row; the title wraps onto two lines instead. */
 .brand {
   display: flex;
+  flex: 1 1 auto;
   align-items: baseline;
   gap: 10px;
   min-width: 0;
@@ -202,6 +204,7 @@ body.idle {
   font-size: 24px;
   font-weight: 600;
   letter-spacing: 0.04em;
+  line-height: 1.1;
 }
 
 .brand-sub {
@@ -214,9 +217,9 @@ body.idle {
 
 .controls {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
   justify-content: flex-end;
 }
 
@@ -986,7 +989,7 @@ button.primary:hover {
 @media (max-width: 860px) {
 
   .topbar {
-    align-items: flex-start;
+    gap: 10px;
     padding-left: 16px;
     padding-right: 16px;
   }
@@ -1020,19 +1023,38 @@ button.primary:hover {
 
 @media (max-width: 520px) {
   .brand-mark {
-    font-size: 17px;
+    font-size: 16px;
     letter-spacing: 0.02em;
-    white-space: nowrap;
+  }
+
+  .controls {
+    gap: 4px;
+  }
+
+  .controls button.icon {
+    width: 30px;
+    height: 30px;
   }
 
   .controls button:not(.icon) {
-    padding: 7px 10px;
+    padding: 6px 9px;
     font-size: 12.5px;
   }
 
   #recordBtn,
   #fullBtn {
     display: none;
+  }
+}
+
+@media (max-width: 350px) {
+  .brand-mark {
+    font-size: 13.5px;
+    letter-spacing: 0;
+  }
+
+  .controls {
+    gap: 3px;
   }
 }
 

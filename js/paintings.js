@@ -317,7 +317,11 @@ export const PAINTINGS = [
           bob: 0.007,
           rock: 0.035,
           period: 3.2,
+          // The cut settles on the tug's dark funnel and smoke; its white
+          // water churns far below, at the waterline under the hull.
           foam: 0.9,
+          foamAt: 3.6,
+          foamX: 0.35,
           smoke: true,
         },
         { type: 'rise', x: 'sun', y: 'sun', rx: 0.05, ry: 0.07, matte: 'light', dy: 0.05, light: true },
