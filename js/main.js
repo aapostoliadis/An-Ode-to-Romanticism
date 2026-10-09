@@ -339,15 +339,17 @@ function showProgress(tau, dur) {
   return clamp(u, 0, 1);
 }
 
+// Every painting opens with no push (zoom 1, the painting filling the
+// screen), then the camera eases in to the painting's push and draws back.
 function cameraAt(r, tau) {
   const u = showProgress(tau, r.duration);
-  const push = reducedMotion ? 1 + (r.zoom - 1) * 0.3 : r.zoom;
+  const push = Math.max(1, reducedMotion ? 1 + (r.zoom - 1) * 0.3 : r.zoom);
   if (u < 0.72) {
     const k = ease(u / 0.72);
-    return [lerp(1.04, push, k), lerp(0.5, r.focusX, k), lerp(0.5, r.focusY, k)];
+    return [lerp(1, push, k), lerp(0.5, r.focusX, k), lerp(0.5, r.focusY, k)];
   }
   const k = ease((u - 0.72) / 0.28);
-  const endZoom = 1.04 + (push - 1.04) * 0.55;
+  const endZoom = 1 + (push - 1) * 0.55;
   return [lerp(push, endZoom, k), lerp(r.focusX, lerp(0.5, r.focusX, 0.6), k), lerp(r.focusY, lerp(0.5, r.focusY, 0.6), k)];
 }
 
@@ -542,12 +544,14 @@ function layerViews(r, motion) {
   const v = state.view;
   if (state.editing) return { sky: v, water: v, land: v };
   const depth = clamp(r.parallax * motion, 0, 1.5);
-  const base = coverView(1.04, 0.5, 0.5);
+  const base = coverView(1, 0.5, 0.5);
   const look = [(state.mouseSmooth[0] - 0.5) * 0.03 * depth, (state.mouseSmooth[1] - 0.5) * 0.02 * depth];
+  // The look-around stays on the canvas: with no push there is no margin,
+  // so the planes only shift once the camera has pushed in.
   const plane = (follow, lookGain) => {
     const out = v.map((x, i) => base[i] + (x - base[i]) * follow);
-    out[0] += look[0] * lookGain;
-    out[1] += look[1] * lookGain;
+    out[0] = clamp(out[0] + look[0] * lookGain, 0, Math.max(0, 1 - out[2]));
+    out[1] = clamp(out[1] + look[1] * lookGain, 0, Math.max(0, 1 - out[3]));
     return out;
   };
   return {

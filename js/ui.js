@@ -67,7 +67,8 @@ export const CONTROL_GROUPS = [
   {
     title: 'Camera and show',
     items: [
-      { key: 'zoom', label: 'Camera push', min: 1, max: 2.5, step: 0.01 },
+      // Shown as the push itself: 0.00 is no push (the stored zoom is 1).
+      { key: 'zoom', label: 'Camera push', min: 1, max: 2.5, step: 0.01, shift: -1 },
       { key: 'duration', label: 'Time on the wall', min: 12, max: 120, step: 1, unit: 's' },
       { key: 'transition', label: 'Arrives with', type: 'select', options: TRANSITIONS },
     ],
@@ -84,7 +85,7 @@ export const CONTROL_GROUPS = [
 
 function format(item, v) {
   if (item.step >= 1) return `${Math.round(v)}${item.unit ?? ''}`;
-  return Number(v).toFixed(2);
+  return Number(v + (item.shift ?? 0)).toFixed(2);
 }
 
 export function buildEditor(container, onChange) {
