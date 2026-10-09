@@ -73,6 +73,15 @@ export const DEFAULT_RECIPE = {
   snow: 0,
   embers: 0,
   fire: 0,
+  // Fire only above the horizon (not in reflections on the water).
+  fireAbove: false,
+  // A plume of painted smoke that streams the way it rises (angle on the
+  // screen, -90 straight up); plumeSnap finds the dark mass near the hint.
+  plume: 0,
+  plumeX: 0.5,
+  plumeY: 0.5,
+  plumeR: 0.15,
+  plumeAngle: -50,
   // Layers: sky drift, foliage sway, drifting light and brush texture
   // shimmer. parallax sets how far apart the layers sit in depth.
   skyDrift: 0.5,
@@ -375,7 +384,7 @@ export const PAINTINGS = [
           period: 4.2,
           pivot: 0.85,
           foam: 1,
-          foamAt: 0.85,
+          foamAt: 1.28,
           foamX: -0.3,
           foamW: 0.9,
           shape: [
@@ -459,7 +468,24 @@ export const PAINTINGS = [
       sounds: 'blizzard',
       // The steam-boat rolls in the heart of the vortex.
       elements: [
-        { type: 'rock', x: 0.48, y: 0.46, rx: 0.08, ry: 0.16, snap: 'dark', snapRadius: 0.08, bob: 0.013, rock: 0.075, period: 3.6, foam: 1 },
+        {
+          type: 'rock',
+          x: 0.48,
+          y: 0.46,
+          rx: 0.08,
+          ry: 0.16,
+          snap: 'dark',
+          snapRadius: 0.08,
+          bob: 0.013,
+          rock: 0.075,
+          period: 3.6,
+          // The white water churns along the bottom of the dark hull, found
+          // in the painting below the mast the cut is centred on.
+          foam: 1,
+          foamAt: 'hull',
+          foamX: 0.6,
+          foamW: 1.8,
+        },
       ],
     },
     study: {
@@ -560,31 +586,9 @@ export const PAINTINGS = [
       transition: 'light',
       mood: 'fire',
       sounds: 'fire',
-      // The crowded barges on the Thames row slowly toward the fire, the way
-      // their bows point: left and a little upstream.
-      elements: [
-        {
-          type: 'drift',
-          x: 0.3367, y: 0.7549, rx: 0.1293, ry: 0.0604,
-          onStudy: false,
-          soft: 3,
-          foam: 0,
-          dx: -0.04,
-          dy: -0.008,
-          anchor: 0,
-          bob: 0.002,
-          rock: 0.006,
-          period: 6,
-          pivot: 0.5,
-          shape: [
-            [-0.988, -0.544], [-0.903, -0.733], [-0.826, -0.756], [-0.749, -0.644], [-0.671, -0.933], [-0.536, -1.0],
-            [-0.439, -0.878], [-0.323, -0.822], [-0.188, -0.767], [-0.052, -0.6], [0.103, -0.433], [0.257, -0.322],
-            [0.412, -0.211], [0.567, -0.178], [0.76, -0.156], [0.896, -0.1], [0.992, 0.067], [1.0, 0.289],
-            [0.915, 0.511], [0.799, 0.756], [0.683, 0.922], [0.489, 1.0], [0.219, 0.922], [-0.052, 0.711],
-            [-0.284, 0.456], [-0.369, 0.289], [-0.516, 0.144], [-0.787, 0.0], [-0.942, -0.089], [-1.0, -0.289],
-          ],
-        },
-      ],
+      // Only the blaze above the bridge burns, not its reflection in the
+      // river below.
+      fireAbove: true,
     },
     study: {
       sky: [[0, '#141826'], [0.3, '#3a2c3a'], [0.5, '#c06a2a'], [0.62, '#f2b04a'], [1, '#1e1812']],
@@ -639,7 +643,8 @@ export const PAINTINGS = [
       // viaduct vanishes into the rain behind it. The engine is painted in
       // the same dark tones as the viaduct under it, so a colour cut would
       // leave its front behind; it is rotoscoped instead, with an outline
-      // traced around the boiler, chimney, lamps and buffer beam.
+      // traced around the boiler, chimney, lamps and buffer beam. The dark
+      // haze trailing behind the engine stays where it is painted.
       elements: [
         {
           type: 'approach',
@@ -649,10 +654,10 @@ export const PAINTINGS = [
           ry: 0.089,
           angle: 24,
           shape: [
-            [-0.727, 0.569], [-0.718, 0.311], [-0.628, 0.099], [-0.464, -0.116], [-0.214, -0.365], [0.014, -0.575],
-            [0.154, -0.662], [0.135, -0.789], [0.25, -0.878], [0.302, -0.722], [0.4, -0.657], [0.5, -0.483],
-            [0.639, -0.285], [0.772, -0.082], [0.855, 0.268], [0.823, 0.512], [0.602, 0.749], [0.353, 0.877],
-            [0.156, 0.889], [0.022, 0.61], [-0.191, 0.71], [-0.459, 0.885], [-0.629, 0.854],
+            [-0.753, 0.115], [-0.628, 0.099], [-0.464, -0.116], [-0.214, -0.365], [0.014, -0.575], [0.154, -0.662],
+            [0.135, -0.789], [0.25, -0.878], [0.302, -0.722], [0.4, -0.657], [0.5, -0.483], [0.639, -0.285],
+            [0.772, -0.082], [0.855, 0.268], [0.823, 0.512], [0.602, 0.749], [0.353, 0.877], [0.156, 0.889],
+            [0.022, 0.61], [-0.099, 0.65], [-0.215, 0.61], [-0.388, 0.468], [-0.582, 0.268],
           ],
           vx: 0.505,
           vy: 0.526,
@@ -706,6 +711,14 @@ export const PAINTINGS = [
       transition: 'light',
       mood: 'radiant',
       sounds: 'light',
+      // The dark smoke in the lower half streams up and to the right as it
+      // rises; it is found as the darkest mass near the hint.
+      plume: 1.5,
+      plumeX: 0.44,
+      plumeY: 0.72,
+      plumeR: 0.17,
+      plumeAngle: -50,
+      plumeSnap: 0.12,
       // The heart of the vortex breathes.
       elements: [{ type: 'pulse', x: 'sun', y: 'sun', rx: 0.12, ry: 0.12, matte: 'light', pulse: 0.09, period: 6 }],
     },

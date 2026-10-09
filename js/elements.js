@@ -111,7 +111,7 @@ export function sanitizeElements(list) {
 // Move a hinted position onto the most distinct dark (or bright) mass
 // nearby: centre-surround contrast at the element's scale, so a compact
 // locomotive wins over the long dark viaduct it stands on.
-function snapPosition(analysis, el, mode, radius) {
+export function snapPosition(analysis, el, mode, radius) {
   const { width: W, height: H, lum } = analysis;
   const rs = Math.max(1, Math.round(el.rx * W * 0.35));
   const rl = Math.max(rs + 1, Math.round(el.rx * W * 1.2));
@@ -140,6 +140,36 @@ function snapPosition(analysis, el, mode, radius) {
     }
   }
   return { x: bx, y: by };
+}
+
+// The waterline of a dark hull: down the column under the element (where
+// its foam goes), the darkest band is the hull, and the white water belongs
+// where that band gives way to lighter sea. Returns foamAt (a fraction of
+// the half height below the centre), or null when no hull stands out.
+function findWaterline(analysis, el) {
+  const { width: W, height: H, lum } = analysis;
+  const cx = el.x + (el.foamX ?? 0) * el.rx;
+  const half = Math.max(0.01, (el.foamW ?? 1.3) * el.rx * 0.5);
+  const x0 = clamp(Math.round((cx - half) * W), 0, W - 1);
+  const x1 = clamp(Math.round((cx + half) * W), x0, W - 1);
+  const y0 = clamp(Math.round(el.y * H), 0, H - 1);
+  const y1 = clamp(Math.round((el.y + 0.5) * H), y0, H - 1);
+  const prof = [];
+  for (let y = y0; y <= y1; y++) {
+    let sum = 0;
+    for (let x = x0; x <= x1; x++) sum += lum[y * W + x];
+    prof.push(sum / (x1 - x0 + 1));
+  }
+  let dark = 0;
+  for (let i = 1; i < prof.length; i++) if (prof[i] < prof[dark]) dark = i;
+  const below = prof.slice(dark);
+  const bright = Math.max(...below);
+  if (bright - prof[dark] < 0.08) return null;
+  const mid = prof[dark] + (bright - prof[dark]) * 0.5;
+  let edge = below.findIndex((v) => v > mid);
+  if (edge < 0) return null;
+  edge += dark;
+  return ((y0 + edge) / H - el.y) / el.ry;
 }
 
 // Where an approaching element comes from: along its tilt when it has one
@@ -209,6 +239,8 @@ export function resolveElements(recipe, analysis, { study = false } = {}) {
       el.y = p.y;
     }
     if (el.type === 'approach' && (el.vx === 'auto' || el.vy === 'auto')) Object.assign(el, estimateVanishing(analysis, el));
+    // Without a clear hull, the foam sits well below the centre.
+    if (el.foamAt === 'hull') el.foamAt = findWaterline(analysis, el) ?? 1.8;
     delete el.snap;
     delete el.snapRadius;
     delete el.onStudy;

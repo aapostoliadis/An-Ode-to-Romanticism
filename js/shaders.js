@@ -87,6 +87,12 @@ uniform float uFlowSpeed;
 uniform float uFlowFollow;
 uniform vec2 uWind;
 uniform vec4 uVortex;
+// A plume of painted smoke: centre, radius and strength, and the way it
+// rises (screen direction).
+uniform vec4 uPlume;
+uniform vec2 uPlumeDir;
+// 1: fire only above the horizon (the blaze, not its reflection).
+uniform float uFireAbove;
 uniform float uHorizon;
 uniform float uWater;
 uniform float uMist;
@@ -273,6 +279,14 @@ float sparks(vec2 q, float scale, float seed) {
 vec3 flowSample(vec2 p, float amount, vec2 bias) {
   vec4 ana = texture(uAna, p);
   vec2 f = flowAt(p, ana) * amount + bias;
+  // Painted smoke streams the way it rises, billowing as it goes, whatever
+  // the strokes or the vortex around it do.
+  if (uPlume.w > 0.0) {
+    vec2 d = toIso(p - uPlume.xy);
+    float fall = exp(-dot(d, d) / (uPlume.z * uPlume.z));
+    vec2 curl = vec2(vnoise(p * 6.0 + vec2(0.0, uTime * 0.12)), vnoise(p * 6.0 + vec2(5.2, -uTime * 0.1))) - 0.5;
+    f = mix(f, (uPlumeDir + curl * 1.2) * uPlume.w, clamp(fall * 1.4, 0.0, 1.0));
+  }
   float ph = uTime * uFlowSpeed + ana.a * 0.6;
   float ph0 = fract(ph);
   float ph1 = fract(ph + 0.5);
@@ -512,10 +526,13 @@ void main() {
     }
   }
 
-  // Fire: warm, bright areas flicker and glow.
+  // Fire: warm, bright areas flicker and glow; above the horizon only when
+  // the score asks, so the blaze burns and its reflection in the river
+  // stays still.
+  float fireArea = uFireAbove > 0.0 ? 1.0 - smoothstep(uHorizon - 0.02, uHorizon + 0.01, p.y) : 1.0;
   if (uFire > 0.0) {
     vec3 base = textureLod(uPaint, p, 2.0).rgb;
-    float warm = smoothstep(0.06, 0.32, base.r - base.b) * smoothstep(0.3, 0.75, luma(base));
+    float warm = smoothstep(0.06, 0.32, base.r - base.b) * smoothstep(0.3, 0.75, luma(base)) * fireArea;
     float fl = fbm(vec2(q.x * 7.0, q.y * 5.0 + t * 1.3));
     float fl2 = vnoise(vec2(q.x * 20.0, t * 6.0));
     col *= 1.0 + uFire * warm * ((fl - 0.45) * 0.9 + (fl2 - 0.5) * 0.25);
@@ -569,7 +586,7 @@ void main() {
   }
   if (uEmbers > 0.0) {
     vec3 b = textureLod(uPaint, p + vec2(0.0, 0.06), 4.0).rgb;
-    float warmMask = smoothstep(0.05, 0.3, b.r - b.b) * smoothstep(0.25, 0.6, luma(b));
+    float warmMask = smoothstep(0.05, 0.3, b.r - b.b) * smoothstep(0.25, 0.6, luma(b)) * fireArea;
     float e = sparks(q, 25.0, 1.0) + sparks(q, 45.0, 2.0) * 0.7 + sparks(q, 80.0, 3.0) * 0.5;
     col += vec3(1.0, 0.55, 0.18) * e * uEmbers * warmMask * 1.6;
   }

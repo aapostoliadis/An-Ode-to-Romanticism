@@ -12,6 +12,7 @@ import {
   resolveElements,
   retypeElement,
   sanitizeElements,
+  snapPosition,
 } from './elements.js';
 import { fitSource, loadFirst, loadImage, paintStudy } from './loader.js';
 import {
@@ -38,7 +39,7 @@ const TRANSITION_SECONDS = { brush: 3.4, bleed: 3.8, light: 3.6, flow: 3.4, dark
 const REVEAL_SECONDS = 8;
 // Bumped when the shape of a score changes, so old saved edits do not hide
 // new defaults (v5: rough seas, foam, flags, sunbeams).
-const STORAGE_PREFIX = 'turner-lumieres:recipe:v6:';
+const STORAGE_PREFIX = 'turner-lumieres:recipe:v7:';
 
 let renderer;
 try {
@@ -149,6 +150,12 @@ function storageKey(prepared) {
 function baseRecipe(prepared) {
   const authored = prepared.entry.recipe ?? autoRecipe(prepared.analysis);
   const r = resolveRecipe({ ...DEFAULT_RECIPE, ...authored }, prepared.analysis);
+  if (r.plume > 0 && r.plumeSnap > 0) {
+    // Centre the smoke plume on the dark mass of painted smoke near its hint.
+    const p = snapPosition(prepared.analysis, { x: r.plumeX, y: r.plumeY, rx: r.plumeR * 0.6 }, 'dark', r.plumeSnap);
+    r.plumeX = p.x;
+    r.plumeY = p.y;
+  }
   r.elements = resolveElements(r, prepared.analysis, { study: prepared.isStudy });
   return r;
 }
